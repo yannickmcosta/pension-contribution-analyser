@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Compare payslip pension contributions against base salary and qualifying earnings. Runs entirely in your browser.">
+<meta name="robots" content="noindex">
+<title>Pension Contribution Audit</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128202;</text></svg>">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" crossorigin="anonymous">
+<link href="styles.css" rel="stylesheet">
+</head>
+<body class="bg-body-tertiary">
+
+<a href="#main-content" class="visually-hidden-focusable skip-link">Skip to main content</a>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary-subtle sticky-top">
+  <div class="container-xxl">
+    <span class="navbar-brand d-flex align-items-center gap-2 mb-0">
+      <i class="bi bi-clipboard-data" aria-hidden="true"></i>
+      <span>
+        <span class="d-block lh-1">Pension Contribution Audit</span>
+        <small class="d-none d-md-block navbar-subtitle">Compare payslip pension contributions against base salary and qualifying earnings</small>
+      </span>
+    </span>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarActions" aria-controls="navbarActions" aria-expanded="false" aria-label="Toggle navigation menu">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarActions">
+      <div class="ms-auto d-flex flex-wrap gap-2 py-2 py-lg-0">
+        <button type="button" class="btn btn-outline-light btn-sm" id="btn-settings" data-bs-toggle="modal" data-bs-target="#settingsModal">
+          <i class="bi bi-sliders" aria-hidden="true"></i> Settings
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-export-json">
+          <i class="bi bi-download" aria-hidden="true"></i> Export JSON
+        </button>
+        <button type="button" class="btn btn-outline-light btn-sm" id="btn-export-csv">
+          <i class="bi bi-filetype-csv" aria-hidden="true"></i> Export CSV
+        </button>
+        <button type="button" class="btn btn-outline-light btn-sm" id="btn-import">
+          <i class="bi bi-upload" aria-hidden="true"></i> Import JSON
+        </button>
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-clear" data-bs-toggle="modal" data-bs-target="#clearModal">
+          <i class="bi bi-trash3" aria-hidden="true"></i> Clear All Data
+        </button>
+        <input type="file" id="import-file" accept="application/json,.json" class="d-none"
+               tabindex="-1" aria-label="Choose a pension audit JSON backup file to import">
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main class="container-xxl py-4" id="main-content">
+
+  <!-- Privacy notice ------------------------------------------------- -->
+  <div class="alert alert-secondary d-flex align-items-start gap-2 py-2 px-3 small mb-4" role="note">
+    <i class="bi bi-shield-lock flex-shrink-0 mt-1" aria-hidden="true"></i>
+    <div>
+      <strong>Your data stays in this browser.</strong>
+      Nothing entered into this application is uploaded or transmitted anywhere. Figures are saved to this
+      browser's local storage only. Use <strong>Export JSON</strong> to keep your own backup.
+    </div>
+  </div>
+
+  <!-- Summary dashboard ---------------------------------------------- -->
+  <section aria-labelledby="summary-heading" class="mb-4">
+    <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2 mb-3">
+      <h2 class="h5 mb-0" id="summary-heading">Summary</h2>
+      <div class="d-flex flex-wrap gap-2" id="summary-badges" aria-live="polite"></div>
+    </div>
+
+    <div class="row g-3" id="summary-cards">
+      <div class="col-6 col-lg-3">
+        <div class="card h-100 border-start border-4 border-secondary">
+          <div class="card-body">
+            <p class="stat-label"><i class="bi bi-cash-stack" aria-hidden="true"></i> Total gross pay analysed</p>
+            <p class="stat-value" id="stat-gross">—</p>
+            <p class="stat-sub" id="stat-range">No payslips entered yet</p>
+            <p class="stat-sub" id="stat-pensionable">Pensionable pay: —</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card h-100 border-start border-4 border-primary">
+          <div class="card-body">
+            <p class="stat-label"><i class="bi bi-building" aria-hidden="true"></i> Expected employer contributions</p>
+            <p class="stat-value" id="stat-expected-employer">—</p>
+            <p class="stat-sub">If calculated on base/pensionable pay</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card h-100 border-start border-4 border-info">
+          <div class="card-body">
+            <p class="stat-label"><i class="bi bi-receipt" aria-hidden="true"></i> Actual employer contributions</p>
+            <p class="stat-value" id="stat-actual-employer">—</p>
+            <p class="stat-sub" id="stat-actual-employer-rate">As recorded on your payslips</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card h-100 border-start border-4 border-secondary" id="card-employer-shortfall">
+          <div class="card-body">
+            <p class="stat-label"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Employer contribution difference</p>
+            <p class="stat-value" id="stat-employer-shortfall">—</p>
+            <p class="stat-sub" id="stat-employer-shortfall-label">—</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card h-100 border-start border-4 border-secondary">
+          <div class="card-body">
+            <p class="stat-label"><i class="bi bi-list-check" aria-hidden="true"></i> Detected calculation basis</p>
+            <p class="stat-value fs-4" id="stat-payslip-count">Payslips analysed: 0</p>
+            <ul class="list-unstyled stat-sub mb-0" id="stat-basis-counts"></ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card h-100 border-start border-4 border-primary">
+          <div class="card-body">
+            <p class="stat-label"><i class="bi bi-piggy-bank" aria-hidden="true"></i> Expected total pension funding</p>
+            <p class="stat-value" id="stat-expected-total">—</p>
+            <p class="stat-sub">Employer + employee gross</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card h-100 border-start border-4 border-info">
+          <div class="card-body">
+            <p class="stat-label"><i class="bi bi-piggy-bank-fill" aria-hidden="true"></i> Actual total pension funding</p>
+            <p class="stat-value" id="stat-actual-total">—</p>
+            <p class="stat-sub" id="stat-actual-total-rate">Employer + derived employee gross</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card h-100 border-start border-4 border-secondary" id="card-total-shortfall">
+          <div class="card-body">
+            <p class="stat-label"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i> Overall pension funding difference</p>
+            <p class="stat-value" id="stat-total-shortfall">—</p>
+            <p class="stat-sub" id="stat-total-shortfall-label">—</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Basis in use --------------------------------------------------- -->
+  <section aria-labelledby="basis-heading" class="mb-4">
+    <div class="card">
+      <div class="card-body py-3">
+        <h2 class="h6 text-uppercase text-body-secondary mb-3" id="basis-heading">Calculation settings in use</h2>
+        <div class="row g-3 small" id="settings-summary"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Charts ---------------------------------------------------------- -->
+  <section aria-labelledby="charts-heading" class="mb-4">
+    <h2 class="h5 mb-3" id="charts-heading">Visual comparison</h2>
+    <div class="row g-3">
+      <div class="col-12 col-xl-7">
+        <div class="card h-100">
+          <div class="card-header bg-body">
+            <span class="fw-semibold">Pension contributions per pay period</span>
+            <span class="d-block small text-body-secondary">Expected on base salary, expected on qualifying earnings, and actual</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-legend mb-2" id="chart-legend"></div>
+            <div class="chart-scroll" id="chart-bars"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-5">
+        <div class="card h-100">
+          <div class="card-header bg-body">
+            <span class="fw-semibold">Cumulative difference over time</span>
+            <span class="d-block small text-body-secondary">Running total of expected (base salary) less actual pension funding</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-scroll" id="chart-cumulative"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="small text-body-secondary mt-2 mb-0">
+      <i class="bi bi-info-circle" aria-hidden="true"></i>
+      The same figures are listed in the analysis table below.
+    </p>
+  </section>
+
+  <!-- Payslip entry --------------------------------------------------- -->
+  <section aria-labelledby="entry-heading" class="mb-4">
+    <div class="card">
+      <div class="card-header bg-body d-flex flex-wrap gap-2 align-items-center justify-content-between">
+        <div>
+          <h2 class="h5 mb-0" id="entry-heading">Payslip entries</h2>
+          <span class="small text-body-secondary" id="entry-hint">Enter one row per payslip. Figures recalculate as you type.</span>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-add-payslip">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i> Add Payslip
+          </button>
+          <button type="button" class="btn btn-outline-primary btn-sm" id="btn-duplicate-last"
+                  data-bs-toggle="tooltip" title="Copy the most recent payslip, including its contribution figures, and advance the pay date by one period">
+            <i class="bi bi-copy" aria-hidden="true"></i> Duplicate Last
+          </button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0 entry-table">
+          <caption class="visually-hidden">Editable payslip entries. Each row is one pay period.</caption>
+          <thead class="table-light">
+            <tr>
+              <th scope="col" class="col-date">Pay date</th>
+              <th scope="col" class="col-period">Pay period / description</th>
+              <th scope="col" class="text-end col-money">Gross pay</th>
+              <th scope="col" class="text-end col-money">
+                Base/pensionable pay
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn" data-bs-toggle="tooltip"
+                        title="Leave blank to use gross pay when the 'use gross pay as pensionable pay' setting is on. Enter a value to override it for this row."
+                        aria-label="About base or pensionable pay"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
+              </th>
+              <th scope="col" class="text-end col-money">
+                Actual employee deduction
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn" data-bs-toggle="tooltip"
+                        title="The pension amount deducted from your net pay, exactly as printed on the payslip."
+                        aria-label="About the actual employee deduction"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
+              </th>
+              <th scope="col" class="text-end col-money">Actual employer contribution</th>
+              <th scope="col" class="col-notes">Notes</th>
+              <th scope="col" class="text-end col-actions"><span class="visually-hidden">Row actions</span></th>
+            </tr>
+          </thead>
+          <tbody id="entry-body"></tbody>
+        </table>
+      </div>
+      <div class="card-body py-3 border-top" id="entry-empty" hidden>
+        <p class="mb-2 text-body-secondary">No payslips have been added yet.</p>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-add-first">
+          <i class="bi bi-plus-lg" aria-hidden="true"></i> Add your first payslip
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Analysis -------------------------------------------------------- -->
+  <section aria-labelledby="analysis-heading" class="mb-4">
+    <div class="card">
+      <div class="card-header bg-body d-flex flex-wrap gap-2 align-items-center justify-content-between">
+        <div>
+          <h2 class="h5 mb-0" id="analysis-heading">Analysis</h2>
+          <span class="small text-body-secondary">Expand a row for the full calculation.</span>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <label class="form-label mb-0 small text-body-secondary" for="sort-key">Sort by</label>
+          <select class="form-select form-select-sm w-auto" id="sort-key">
+            <option value="date">Pay date</option>
+            <option value="shortfall">Difference</option>
+            <option value="basis">Detected basis</option>
+          </select>
+          <select class="form-select form-select-sm w-auto" id="sort-direction" aria-label="Sort direction">
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </select>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-expand-all" aria-pressed="false">
+            <i class="bi bi-arrows-expand" aria-hidden="true"></i> Expand all
+          </button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0 analysis-table">
+          <caption class="visually-hidden">Analysis of each payslip against base salary and qualifying earnings.</caption>
+          <thead class="table-light">
+            <tr>
+              <th scope="col"><span class="visually-hidden">Expand detail</span></th>
+              <th scope="col">Pay date</th>
+              <th scope="col" class="text-end">Gross pay</th>
+              <th scope="col" class="text-end">Pensionable pay</th>
+              <th scope="col" class="text-end">Expected employer</th>
+              <th scope="col" class="text-end">Actual employer</th>
+              <th scope="col" class="text-end">Employer difference</th>
+              <th scope="col" class="text-end">Expected employee gross</th>
+              <th scope="col" class="text-end">Actual employee gross</th>
+              <th scope="col" class="text-end">Employee difference</th>
+              <th scope="col" class="text-end">Expected total</th>
+              <th scope="col" class="text-end">Actual total</th>
+              <th scope="col" class="text-end">Total difference</th>
+              <th scope="col">Detected basis</th>
+            </tr>
+          </thead>
+          <tbody id="analysis-body"></tbody>
+          <tfoot class="table-group-divider fw-semibold" id="analysis-foot"></tfoot>
+        </table>
+      </div>
+      <div class="card-body py-3 border-top small text-body-secondary" id="analysis-empty" hidden>
+        Add a payslip above to see the analysis.
+      </div>
+    </div>
+  </section>
+
+  <!-- Higher-rate relief ---------------------------------------------- -->
+  <section aria-labelledby="higher-rate-heading" class="mb-4">
+    <div class="card">
+      <div class="card-header bg-body d-flex flex-wrap gap-2 align-items-center justify-content-between">
+        <h2 class="h6 mb-0" id="higher-rate-heading">
+          <i class="bi bi-info-circle" aria-hidden="true"></i>
+          Optional: higher-rate tax relief (informational only)
+        </h2>
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" role="switch" id="toggle-higher-rate">
+          <label class="form-check-label small" for="toggle-higher-rate">Show this panel</label>
+        </div>
+      </div>
+      <div class="card-body" id="higher-rate-body" hidden>
+        <div class="row g-3 align-items-end">
+          <div class="col-12 col-md-4 col-lg-3">
+            <label class="form-label" for="marginal-rate">Your marginal income tax rate</label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control" id="marginal-rate" min="0" max="100" step="0.1" inputmode="decimal">
+              <span class="input-group-text">%</span>
+            </div>
+            <div class="form-text">England &amp; Northern Ireland higher rate is 40%; additional rate 45%. Scottish rates differ.</div>
+          </div>
+          <div class="col-12 col-md-8 col-lg-9">
+            <div id="higher-rate-output" class="small"></div>
+          </div>
+        </div>
+        <div class="alert alert-warning small mt-3 mb-0" role="note">
+          <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+          <strong>This is informational only and is deliberately excluded from every figure above.</strong>
+          Under Relief at Source the pension scheme normally claims <em>basic-rate</em> tax relief from HMRC and adds it to
+          your pot automatically. If you pay tax above the basic rate, any further relief is personal tax relief that you
+          usually have to claim yourself (for example through Self Assessment or by contacting HMRC). It is not money
+          contributed by your employer, it does not enter the pension as an employer contribution, and it does not
+          reduce or offset any employer shortfall shown above.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Help ------------------------------------------------------------ -->
+  <section aria-labelledby="help-heading" class="mb-4">
+    <div class="card">
+      <div class="card-header bg-body p-0">
+        <h2 class="h6 mb-0" id="help-heading">
+          <button class="btn btn-link text-decoration-none w-100 text-start py-3 px-3 fw-semibold collapsed" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#help-body" aria-expanded="false" aria-controls="help-body">
+            <i class="bi bi-chevron-right chevron me-1" aria-hidden="true"></i>
+            How the calculations work
+          </button>
+        </h2>
+      </div>
+      <div class="collapse" id="help-body">
+        <div class="card-body">
+          <div class="row g-4">
+            <div class="col-12 col-lg-6">
+              <h3 class="h6">Base / pensionable salary</h3>
+              <p class="small">
+                The salary or pay figure against which a particular pension scheme has stated contributions will be
+                calculated. If your contract or scheme documentation says contributions are a percentage of your basic
+                salary, then your basic salary is the pensionable pay figure and the whole of it counts.
+              </p>
+
+              <h3 class="h6">Qualifying earnings</h3>
+              <p class="small">
+                A statutory earnings band used for automatic enrolment minimum contribution calculations. Only the slice
+                of earnings between a lower and an upper threshold counts. Earnings below the lower threshold are
+                ignored entirely, and earnings above the upper threshold are capped. Because it is only a band, it
+                produces much smaller contributions than a full-salary basis for anyone earning above the upper
+                threshold.
+              </p>
+              <p class="small mb-0">
+                Qualifying earnings for a pay period are:
+                <code>max(0, min(gross pay, upper threshold) &minus; lower threshold)</code>
+              </p>
+            </div>
+
+            <div class="col-12 col-lg-6">
+              <h3 class="h6">Relief at Source (RAS)</h3>
+              <p class="small">
+                Under Relief at Source &mdash; the method NEST normally uses &mdash; you pay your contribution out of
+                pay that has already been taxed, and the pension provider then claims basic-rate tax relief from HMRC
+                and adds it to your pot. This is why the amount deducted from your payslip is smaller than the amount
+                that actually lands in your pension.
+              </p>
+              <p class="small">
+                This tool therefore distinguishes carefully between:
+              </p>
+              <ul class="small">
+                <li><strong>Employee deduction from payslip</strong> &mdash; the net amount taken from your pay.</li>
+                <li><strong>Gross employee pension contribution</strong> &mdash; the deduction plus the basic-rate tax
+                    relief reclaimed by the provider.</li>
+              </ul>
+              <p class="small mb-0">
+                For a 20% RAS scheme, <strong>£40 deducted from pay corresponds to a £50 gross pension contribution</strong>
+                once £10 of basic-rate relief is added. Working backwards, the tool derives your gross contribution as
+                <code>deduction &divide; (1 &minus; relief rate)</code>.
+              </p>
+            </div>
+          </div>
+
+          <hr>
+
+          <h3 class="h6">The comparison, step by step</h3>
+          <div class="row g-3 small">
+            <div class="col-12 col-lg-4">
+              <div class="border rounded p-3 h-100">
+                <p class="fw-semibold mb-2">1. Expected on base salary</p>
+                <ul class="mb-0 ps-3">
+                  <li>Employer = pensionable pay &times; employer %</li>
+                  <li>Employee gross = pensionable pay &times; employee %</li>
+                  <li>Employee net deduction = employee gross &times; (1 &minus; relief rate)</li>
+                  <li>Tax relief = employee gross &minus; employee net</li>
+                  <li>Total = employer + employee gross</li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-12 col-lg-4">
+              <div class="border rounded p-3 h-100">
+                <p class="fw-semibold mb-2">2. Actual, from the payslip</p>
+                <ul class="mb-0 ps-3">
+                  <li>Employee net deduction = as printed on the payslip</li>
+                  <li>Employee gross = deduction &divide; (1 &minus; relief rate)</li>
+                  <li>Relief claimed = employee gross &minus; deduction</li>
+                  <li>Employer = as printed on the payslip</li>
+                  <li>Total = employer + employee gross</li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-12 col-lg-4">
+              <div class="border rounded p-3 h-100">
+                <p class="fw-semibold mb-2">3. Expected on qualifying earnings</p>
+                <ul class="mb-0 ps-3">
+                  <li>Qualifying earnings = banded gross pay</li>
+                  <li>The same percentages and relief rate are then applied</li>
+                  <li>Shown so you can see whether your payslip is following the statutory minimum band rather than
+                      your stated salary</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="h6 mt-4">Differences</h3>
+          <p class="small">
+            Differences are calculated as <em>expected on base salary</em> minus <em>actual</em>. A positive figure is a
+            <strong>shortfall</strong> (less went in than the base salary basis would give). A negative figure is
+            labelled an <strong>overpayment</strong> rather than shown as a negative shortfall.
+          </p>
+
+          <h3 class="h6">Effective contribution rates</h3>
+          <p class="small">
+            The same difference expressed as a percentage: what the money actually paid works out at as a share of your
+            base/pensionable pay, next to the rate your scheme states. A qualifying earnings calculation on a salary
+            above the upper threshold produces a much lower effective rate than the headline one, because only the
+            slice of pay inside the band attracts contributions. This is shown for the whole period on the summary
+            cards and per payslip in the row detail, and it is a restatement of the same figures, not a separate
+            calculation.
+          </p>
+
+          <h3 class="h6">Detected calculation basis</h3>
+          <p class="small">
+            The actual employer contribution and actual employee deduction are compared, within the configured
+            tolerance, against both the base salary figures and the qualifying earnings figures. The result is shown as
+            <span class="badge text-bg-success">Matches Base Salary</span>,
+            <span class="badge text-bg-warning">Matches Qualifying Earnings</span>,
+            <span class="badge text-bg-danger">Does Not Match Either</span> or
+            <span class="badge text-bg-secondary">Insufficient Data</span>.
+            A mismatch is not in itself evidence of an error &mdash; see the note at the foot of the page.
+          </p>
+
+          <h3 class="h6">Rounding</h3>
+          <p class="small">
+            Every money figure is rounded to whole pence, half away from zero, at each step of the calculation, which is
+            the usual payroll convention. The comparison tolerance (default £0.02) absorbs the small differences that
+            arise from different rounding points in payroll software.
+          </p>
+
+          <hr>
+          <div class="d-flex flex-wrap gap-3 align-items-center">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-run-tests">
+              <i class="bi bi-clipboard-check" aria-hidden="true"></i> Run calculation self-tests
+            </button>
+            <span class="small text-body-secondary">Checks the calculation engine against a set of known worked examples.</span>
+          </div>
+          <div id="test-output" class="mt-3"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="pb-4">
+    <div class="alert alert-light border small mb-0" role="note">
+      <p class="mb-2">
+        <strong>Important.</strong> This tool is intended to assist with checking pension contribution calculations. It
+        does not provide legal, financial or tax advice. Pension scheme rules, earnings definitions and tax treatment can
+        vary. Check your employment terms, pension scheme documentation, payroll records and current statutory guidance.
+      </p>
+      <p class="mb-2">
+        A difference between the figures shown here and your payslip does not automatically mean anything has gone
+        wrong. Employers and schemes may legitimately use a different definition of pensionable pay, a different
+        earnings basis, salary sacrifice, a different tax relief method, or contribution caps. The purpose of this tool
+        is to show you clearly which basis appears to have been used so that you can ask an informed question.
+      </p>
+      <p class="mb-0 text-body-secondary">
+        Statutory qualifying earnings thresholds and tax rates change from time to time. All thresholds and percentages
+        used here are editable in <strong>Settings</strong> and should be checked against current guidance before you
+        rely on any figure.
+      </p>
+    </div>
+  </footer>
+</main>
+
+<!-- Settings modal ---------------------------------------------------- -->
+<div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="settingsModalLabel"><i class="bi bi-sliders" aria-hidden="true"></i> Settings</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="settings-form" novalidate>
+          <fieldset class="mb-4">
+            <legend class="h6 text-uppercase text-body-secondary">Employee details</legend>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="set-reference">Name or reference <span class="text-body-secondary">(optional)</span></label>
+                <input type="text" class="form-control" id="set-reference" maxlength="80" autocomplete="off">
+                <div class="form-text">Only stored in this browser. Leave blank if you prefer.</div>
+              </div>
+              <div class="col-12 col-md-3">
+                <label class="form-label" for="set-annual-salary">Annual base salary</label>
+                <div class="input-group">
+                  <span class="input-group-text" id="salary-symbol">£</span>
+                  <input type="number" class="form-control" id="set-annual-salary" min="0" step="0.01" inputmode="decimal" aria-describedby="salary-symbol set-annual-salary-help">
+                </div>
+                <div class="form-text" id="set-annual-salary-help">Used to suggest pay figures for new payslips.</div>
+              </div>
+              <div class="col-12 col-md-3">
+                <label class="form-label" for="set-frequency">Pay frequency</label>
+                <select class="form-select" id="set-frequency"></select>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="mb-4">
+            <legend class="h6 text-uppercase text-body-secondary">Contribution settings</legend>
+            <div class="row g-3">
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="set-employer-pct">Employer contribution</label>
+                <div class="input-group">
+                  <input type="number" class="form-control" id="set-employer-pct" min="0" max="100" step="0.01" inputmode="decimal">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="set-employee-pct">Employee gross contribution</label>
+                <div class="input-group">
+                  <input type="number" class="form-control" id="set-employee-pct" min="0" max="100" step="0.01" inputmode="decimal">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="set-ras-pct">Relief at Source tax relief</label>
+                <div class="input-group">
+                  <input type="number" class="form-control" id="set-ras-pct" min="0" max="99" step="0.01" inputmode="decimal" aria-describedby="set-ras-help">
+                  <span class="input-group-text">%</span>
+                </div>
+                <div class="form-text" id="set-ras-help">Basic rate relief claimed by the scheme. Default 20%.</div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="mb-4">
+            <legend class="h6 text-uppercase text-body-secondary">Qualifying earnings thresholds</legend>
+            <div class="alert alert-secondary small py-2" role="note">
+              These are statutory figures that change from time to time. Check them against current guidance for the tax
+              year you are auditing.
+            </div>
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="set-qe-lower">Annual lower threshold</label>
+                <div class="input-group">
+                  <span class="input-group-text currency-symbol">£</span>
+                  <input type="number" class="form-control" id="set-qe-lower" min="0" step="0.01" inputmode="decimal">
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="set-qe-upper">Annual upper threshold</label>
+                <div class="input-group">
+                  <span class="input-group-text currency-symbol">£</span>
+                  <input type="number" class="form-control" id="set-qe-upper" min="0" step="0.01" inputmode="decimal">
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" role="switch" id="set-custom-thresholds" aria-describedby="set-custom-help">
+                  <label class="form-check-label" for="set-custom-thresholds">
+                    Use published pay-period thresholds instead of dividing the annual figures
+                  </label>
+                </div>
+                <div class="form-text" id="set-custom-help">
+                  Payroll and pension systems often use the published rounded pay-period thresholds rather than
+                  annual &divide; number of periods. Derived values for the selected frequency:
+                  <span id="derived-thresholds" class="fw-semibold"></span>
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="set-period-lower">Pay-period lower threshold</label>
+                <div class="input-group">
+                  <span class="input-group-text currency-symbol">£</span>
+                  <input type="number" class="form-control" id="set-period-lower" min="0" step="0.01" inputmode="decimal">
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="set-period-upper">Pay-period upper threshold</label>
+                <div class="input-group">
+                  <span class="input-group-text currency-symbol">£</span>
+                  <input type="number" class="form-control" id="set-period-upper" min="0" step="0.01" inputmode="decimal">
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend class="h6 text-uppercase text-body-secondary">Comparison and display</legend>
+            <div class="row g-3">
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="set-tolerance">Calculation tolerance</label>
+                <div class="input-group">
+                  <span class="input-group-text currency-symbol">£</span>
+                  <input type="number" class="form-control" id="set-tolerance" min="0" step="0.01" inputmode="decimal" aria-describedby="set-tolerance-help">
+                </div>
+                <div class="form-text" id="set-tolerance-help">How close a figure must be to count as a match.</div>
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="set-currency">Currency</label>
+                <select class="form-select" id="set-currency">
+                  <option value="GBP">GBP — pound sterling (£)</option>
+                  <option value="EUR">EUR — euro (€)</option>
+                  <option value="USD">USD — US dollar ($)</option>
+                </select>
+              </div>
+              <div class="col-12 col-md-4 d-flex align-items-end">
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" role="switch" id="set-use-gross" aria-describedby="set-use-gross-help">
+                  <label class="form-check-label" for="set-use-gross">Use gross pay as base/pensionable pay by default</label>
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="form-text mt-0" id="set-use-gross-help">
+                  When on, any payslip row with a blank pensionable pay field uses that row's gross pay. You can still
+                  override any individual row.
+                </div>
+              </div>
+            </div>
+          </fieldset>
+        </form>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-reset-settings">
+          <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Restore default settings
+        </button>
+        <div>
+          <span class="small text-body-secondary me-2"><i class="bi bi-check2" aria-hidden="true"></i> Changes save automatically</span>
+          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Import confirmation modal ----------------------------------------- -->
+<div class="modal fade" id="importModal" tabindex="-1" aria-labelledby="importModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="importModalLabel"><i class="bi bi-upload" aria-hidden="true"></i> Import backup file</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning" role="alert">
+          <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+          <strong>Importing this file will replace the data currently stored in this browser.</strong>
+          Your current settings and payslips will be overwritten and cannot be recovered unless you have exported them.
+        </div>
+        <dl class="row mb-0 small" id="import-preview"></dl>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-outline-primary" id="btn-export-before-import">
+          <i class="bi bi-download" aria-hidden="true"></i> Export current data first
+        </button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-import">Replace my data</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Clear data modal --------------------------------------------------- -->
+<div class="modal fade" id="clearModal" tabindex="-1" aria-labelledby="clearModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="clearModalLabel"><i class="bi bi-trash3" aria-hidden="true"></i> Clear all data</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger" role="alert">
+          <i class="bi bi-exclamation-octagon" aria-hidden="true"></i>
+          This permanently deletes every payslip and all settings stored in this browser. It cannot be undone.
+        </div>
+        <p class="small mb-3" id="clear-summary"></p>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="clear-confirm-check">
+          <label class="form-check-label" for="clear-confirm-check">
+            I understand this cannot be undone and I have exported anything I want to keep.
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-outline-primary" id="btn-export-before-clear">
+          <i class="bi bi-download" aria-hidden="true"></i> Export first
+        </button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-clear" disabled>Delete everything</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -------------------------------------------------------------- -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<script src="calculations.js"></script>
+<script src="tests.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

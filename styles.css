@@ -1,0 +1,266 @@
+/*
+ * Pension Contribution Audit - presentation layer
+ * Restrained styling on top of Bootstrap 5. No animation beyond Bootstrap's own.
+ */
+
+:root {
+  --pca-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --pca-expected: #0d6efd;
+  --pca-qe: #fd7e14;
+  --pca-actual: #6f42c1;
+}
+
+body {
+  font-size: 0.95rem;
+}
+
+.skip-link {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1100;
+  padding: 0.5rem 0.75rem;
+  background: #fff;
+  border-radius: 0.375rem;
+}
+
+/* ---------- Navbar ---------- */
+
+.navbar-brand {
+  font-weight: 600;
+}
+
+.navbar-subtitle {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* ---------- Summary cards ---------- */
+
+.stat-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+  margin-bottom: 0.35rem;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-sub {
+  font-size: 0.78rem;
+  color: var(--bs-secondary-color);
+  margin-bottom: 0;
+}
+
+@media (max-width: 575.98px) {
+  .stat-value { font-size: 1.25rem; }
+}
+
+/* ---------- Tables ---------- */
+
+.entry-table,
+.analysis-table {
+  font-size: 0.85rem;
+}
+
+.entry-table th,
+.analysis-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.analysis-table td,
+.analysis-table th {
+  white-space: nowrap;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.entry-table .form-control,
+.entry-table .form-control-sm {
+  font-size: 0.85rem;
+}
+
+.entry-table input[type="number"],
+.entry-table .num-input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.entry-table .col-date { width: 9.5rem; }
+.entry-table .col-period { width: 12rem; }
+.entry-table .col-money { width: 9.5rem; }
+.entry-table .col-notes { width: 14rem; }
+.entry-table .col-actions { width: 5.5rem; }
+
+.entry-table td { vertical-align: middle; }
+
+.info-btn {
+  color: var(--bs-secondary-color);
+  line-height: 1;
+}
+
+.info-btn:hover { color: var(--bs-primary); }
+
+/* Hide the number spinners: they get in the way of currency entry. */
+.entry-table input[type="number"]::-webkit-outer-spin-button,
+.entry-table input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.entry-table input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.row-warning {
+  color: var(--bs-warning-text-emphasis);
+}
+
+/* ---------- Analysis detail rows ---------- */
+
+.detail-row > td {
+  background-color: var(--bs-tertiary-bg);
+  padding: 0 !important;
+}
+
+.detail-panel {
+  padding: 1rem;
+  white-space: normal;
+}
+
+.detail-panel .card {
+  height: 100%;
+}
+
+.detail-panel dl {
+  margin-bottom: 0;
+}
+
+.detail-panel dt {
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+}
+
+.detail-panel dd {
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 0.15rem;
+  text-align: right;
+}
+
+.detail-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.15rem 0;
+  border-bottom: 1px dashed var(--bs-border-color);
+}
+
+.detail-line:last-child { border-bottom: 0; }
+
+.detail-line .label { color: var(--bs-secondary-color); }
+
+.detail-line .value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.detail-line.total {
+  border-top: 1px solid var(--bs-border-color);
+  border-bottom: 0;
+  margin-top: 0.25rem;
+  padding-top: 0.4rem;
+  font-weight: 600;
+}
+
+.formula {
+  font-family: var(--pca-mono);
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color);
+  white-space: normal;
+}
+
+.expand-btn .chevron {
+  transition: transform 0.15s ease-in-out;
+  display: inline-block;
+}
+
+.expand-btn[aria-expanded="true"] .chevron,
+[data-bs-toggle="collapse"][aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+/* ---------- Charts ---------- */
+
+.chart-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.chart-scroll svg {
+  display: block;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.78rem;
+  color: var(--bs-secondary-color);
+}
+
+.chart-legend .swatch {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 2px;
+  margin-right: 0.3rem;
+  vertical-align: -1px;
+}
+
+.chart-empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--bs-secondary-color);
+  font-size: 0.85rem;
+}
+
+.chart-axis-label,
+.chart-tick {
+  font-size: 10px;
+  fill: var(--bs-secondary-color);
+}
+
+.chart-gridline {
+  stroke: var(--bs-border-color);
+  stroke-width: 1;
+}
+
+.chart-zeroline {
+  stroke: var(--bs-secondary-color);
+  stroke-width: 1;
+}
+
+/* ---------- Misc ---------- */
+
+@media print {
+  .navbar, .entry-table, #entry-heading, .btn, .toast-container { display: none !important; }
+  .card { break-inside: avoid; }
+}

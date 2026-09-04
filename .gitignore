@@ -1,0 +1,15 @@
+# Exported audit data contains real salary and pension figures - never commit it.
+pension-audit-*.json
+pension-audit-*.csv
+*.backup.json
+
+# Editors and operating system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Not needed: this project has no build step and no dependencies.
+node_modules/
+package-lock.json
