@@ -139,6 +139,20 @@ total into pension  = employer + employee gross
 At 20% relief, **£40 deducted from pay is a £50 gross pension contribution**, the £10 difference
 being the relief the provider reclaims.
 
+This is the single most confusing thing about Relief at Source, so the tool never shows the larger
+figure on its own. Wherever an employee contribution appears — the analysis table, the row detail,
+the summary cards, the CSV and the generated email — it is either labelled as including tax relief,
+or broken into the two amounts that make it up:
+
+```
+Taken from your pay            £40.00   <- this is the number on your payslip
+Tax relief added by HMRC       £10.00   <- added later by the provider
+Your contribution              £50.00   <- what actually reaches your pension
+```
+
+If your payslip says one figure and a column here shows a larger one, the difference is the tax
+relief, not an error.
+
 **3. Expected on qualifying earnings**
 
 ```

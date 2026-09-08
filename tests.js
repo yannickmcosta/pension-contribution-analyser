@@ -591,6 +591,27 @@
       C.validateImport({ schemaVersion: 1, payslips: [], settings: { guidedHelp: false } }).data.settings.guidedHelp,
       false);
 
+    /* ---- Tax relief must never be presented as money you paid ------ */
+    var clarityAnalysis = C.analyseAll([
+      { id: 'c1', date: '2026-01-31', grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40 }
+    ], Object.assign({}, baseSettings, { statedBasis: 'base', providerName: 'The Provider' }));
+    var clarity = L.compose(clarityAnalysis, { recipientName: 'A', senderName: 'B',
+      enrolmentPeriod: 'January 2026', schemeQuote: 'Base salary.', responseBy: '01/03/2026' });
+
+    assertEqual('Letter: explains relief at source before quoting any employee figure',
+      clarity.body.indexOf('only part of my contribution') <
+      clarity.body.indexOf('Total reaching my pension'), true);
+    assertEqual('Letter: leads the employee section with the payslip figure',
+      clarity.body.indexOf('Taken from my pay') < clarity.body.indexOf('Total reaching my pension'), true);
+    assertEqual('Letter: shows the relief as a separate line',
+      clarity.body.indexOf('Tax relief added by The Provider') > 0, true);
+    assertEqual('Letter: no longer claims the grossed-up figure was "actually contributed"',
+      clarity.body.indexOf('Actually contributed'), -1);
+    assertEqual('Letter: distinguishes the two employee shortfalls in the totals',
+      clarity.body.indexOf('the shortfall in what is deducted from my pay is') > 0, true);
+    assertEqual('Letter: names the provider as the one reclaiming the relief',
+      clarity.body.indexOf('The Provider reclaims basic rate tax relief') > 0, true);
+
     if (log && typeof console !== 'undefined') {
       results.forEach(function (r) {
         if (!r.ok) { console.error('FAIL  ' + r.name + '  (' + r.detail + ')'); }

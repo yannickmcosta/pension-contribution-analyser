@@ -275,19 +275,22 @@
     out.push(salaryParagraph(o, analysis, money, placeholders));
 
     if (hasComparison && analysis.uniformity.uniform) {
-      out.push('', comparisonBlock(rows[0], s, money, isShortfall));
+      out.push('');
+      out.push('One point on the employee figures, to avoid confusion. Under relief at source the amount ' +
+        'deducted from my pay is only part of my contribution: ' + provider + ' reclaims basic rate tax relief ' +
+        'from HMRC and adds it to my pot afterwards, so it never appears on the payslip. Below I have therefore ' +
+        'separated the amount taken from my pay from the total that reaches the pension.');
+      out.push('', comparisonBlock(rows[0], s, money, isShortfall, provider));
     } else if (hasComparison) {
       out.push('', 'My pay has not been the same in every period, so the figures are set out period by period below.', '');
       out.push(perPeriodTable(rows, money));
     }
 
-    if (hasComparison) {
-    out.push('');
-    out.push('The employee figures above are gross figures, including the basic rate tax relief claimed by ' + provider +
-      '. The amount actually deducted from my pay has been ' +
-      money(rows[0].actual.employeeNet) +
-      (analysis.uniformity.uniform ? ' per pay period, compared with ' + money(rows[0].expectedBase.employeeNet) +
-        ' if calculated on the stated basis.' : '.'));
+    if (hasComparison && !analysis.uniformity.uniform) {
+      out.push('');
+      out.push('The employee totals above include the basic rate tax relief reclaimed by ' + provider +
+        ', so they are larger than the deduction shown on my payslip. The amount actually taken from my pay has been ' +
+        money(rows[0].actual.employeeNet) + ' per pay period.');
     }
 
     /* ---- totals ---- */
@@ -297,7 +300,9 @@
       (excludedCount ? ' in which contributions were due' : '') +
       ', I calculate that employer contributions are short by ' +
       money(t.employerShortfall) + ', with a further ' + money(t.employeeGrossShortfall) +
-      ' of employee contributions missing from my pension pot.');
+      ' of my own contributions missing from my pension pot. That second figure is the shortfall in what reaches ' +
+      'the pension including tax relief; the shortfall in what is deducted from my pay is ' +
+      money(t.employeeNetShortfall) + '.');
     out.push('');
     out.push('The total difference in pension funding is therefore ' + money(t.totalShortfall) +
       (analysis.uniformity.uniform
@@ -425,28 +430,49 @@
     return text;
   }
 
-  function comparisonBlock(row, s, money, isShortfall) {
+  /**
+   * The comparison, written so that the reader can find every figure. The
+   * employee section starts with the number printed on the payslip and builds
+   * up to the amount reaching the pension, because quoting only the grossed-up
+   * total invites the reply "that is not what my payslip says".
+   */
+  function comparisonBlock(row, s, money, isShortfall, provider) {
+    // Pad to a column, but never truncate: a long provider name must not be
+    // cut in half just to keep the figures aligned.
+    var pad = function (label) {
+      var text = label + ':';
+      if (text.length >= 33) { return text + ' '; }
+      return (text + new Array(34).join(' ')).slice(0, 33);
+    };
     var lines = [];
     lines.push(isShortfall
-      ? 'Based on the pension terms I was given, my contributions for each pay period should be:'
+      ? 'Setting my figures against the terms I was given, for each pay period:'
       : 'For each pay period the figures are:');
     lines.push('');
-    lines.push('    Employer contribution at ' + s.employerPercent + '%: ' + money(row.expectedBase.employer));
-    lines.push('    Actually paid: ' + money(row.actual.employer));
-    lines.push('    Difference: ' + money(row.differencesVsBase.employer));
+    lines.push('    Employer contribution at ' + s.employerPercent + '%');
+    lines.push('    ' + pad('    Should be') + money(row.expectedBase.employer));
+    lines.push('    ' + pad('    Actually paid') + money(row.actual.employer));
+    lines.push('    ' + pad('    Difference') + money(row.differencesVsBase.employer));
     lines.push('');
-    lines.push('    Employee gross contribution at ' + s.employeePercent + '%: ' + money(row.expectedBase.employeeGross));
-    lines.push('    Actually contributed: ' + money(row.actual.employeeGross));
-    lines.push('    Difference: ' + money(row.differencesVsBase.employeeGross));
+    lines.push('    My own contribution at ' + s.employeePercent + '%');
+    lines.push('    ' + pad('    Taken from my pay') + money(row.actual.employeeNet) +
+      '   (should be ' + money(row.expectedBase.employeeNet) + ')');
+    lines.push('    ' + pad('    Tax relief added by ' + provider) + money(row.actual.taxRelief) +
+      '   (should be ' + money(row.expectedBase.taxRelief) + ')');
+    lines.push('    ' + pad('    Total reaching my pension') + money(row.actual.employeeGross) +
+      '   (should be ' + money(row.expectedBase.employeeGross) + ')');
+    lines.push('    ' + pad('    Difference') + money(row.differencesVsBase.employeeGross));
     lines.push('');
-    lines.push('    Total pension contribution: ' + money(row.expectedBase.total));
-    lines.push('    Actually contributed: ' + money(row.actual.total));
-    lines.push('    Difference: ' + money(row.differencesVsBase.total));
+    lines.push('    Total going into my pension');
+    lines.push('    ' + pad('    Should be') + money(row.expectedBase.total));
+    lines.push('    ' + pad('    Actually') + money(row.actual.total));
+    lines.push('    ' + pad('    Difference') + money(row.differencesVsBase.total));
     return lines.join('\n');
   }
 
   function perPeriodTable(rows, money) {
-    var lines = ['    Pay date      Should be      Actually paid   Difference'];
+    var lines = ['    (Totals into the pension, including tax relief)', '',
+      '    Pay date      Should be      Actually        Difference'];
     rows.forEach(function (r) {
       lines.push('    ' + pad(C.formatDateUK(r.date) || '-', 14) +
         pad(money(r.expectedBase.total), 15) +

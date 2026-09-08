@@ -293,3 +293,11 @@ body {
   opacity: 0.55;
   font-style: italic;
 }
+
+.detail-line.subtotal {
+  border-top: 1px solid var(--bs-border-color);
+  border-bottom: 0;
+  margin-top: 0.15rem;
+  padding-top: 0.3rem;
+  font-weight: 600;
+}

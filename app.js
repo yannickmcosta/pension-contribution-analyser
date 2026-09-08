@@ -294,7 +294,7 @@
     $('stat-actual-employer-rate').textContent = describeEffectiveRate(
       t.effectiveEmployerRate, t.targetEmployerRate, 'As recorded on your payslips');
     $('stat-actual-total-rate').textContent = describeEffectiveRate(
-      t.effectiveTotalRate, t.targetTotalRate, 'Employer + derived employee gross');
+      t.effectiveTotalRate, t.targetTotalRate, 'Employer + your contribution, incl. tax relief');
 
     renderDifferenceCard('employer-shortfall', t.employerShortfall, counts.total,
       'employer contributions');
@@ -715,11 +715,11 @@
           : 'No base/pensionable pay entered') + '</span>' +
       '</div><div class="card-body py-2">' +
         (base.available ? (
-          line('Employer &times; ' + s.employerPercent + '%', money(base.employer)) +
-          line('Employee gross &times; ' + s.employeePercent + '%', money(base.employeeGross)) +
-          line('&nbsp;&nbsp;of which deducted from pay', money(base.employeeNet)) +
-          line('&nbsp;&nbsp;of which tax relief at ' + reliefRate + '%', money(base.taxRelief)) +
-          line('Total into pension', money(base.total), 'total')
+          line('Employer contribution &times; ' + s.employerPercent + '%', money(base.employer)) +
+          line('Taken from your pay', money(base.employeeNet)) +
+          line('Tax relief added by HMRC at ' + reliefRate + '%', money(base.taxRelief)) +
+          line('Your contribution &times; ' + s.employeePercent + '%', money(base.employeeGross), 'subtotal') +
+          line('Total into the pension', money(base.total), 'total')
         ) : '<p class="small text-body-secondary mb-0">Enter a base/pensionable pay figure for this payslip, or switch on ' +
             '&ldquo;use gross pay as base/pensionable pay&rdquo; in Settings.</p>') +
       '</div></div>';
@@ -734,30 +734,32 @@
       '</div><div class="card-body py-2">' +
         (qe.available ? (
           line('Qualifying earnings', money(qe.qualifyingEarnings)) +
-          line('Employer &times; ' + s.employerPercent + '%', money(qe.employer)) +
-          line('Employee gross &times; ' + s.employeePercent + '%', money(qe.employeeGross)) +
-          line('&nbsp;&nbsp;of which deducted from pay', money(qe.employeeNet)) +
-          line('&nbsp;&nbsp;of which tax relief at ' + reliefRate + '%', money(qe.taxRelief)) +
-          line('Total into pension', money(qe.total), 'total')
+          line('Employer contribution &times; ' + s.employerPercent + '%', money(qe.employer)) +
+          line('Taken from your pay', money(qe.employeeNet)) +
+          line('Tax relief added by HMRC at ' + reliefRate + '%', money(qe.taxRelief)) +
+          line('Your contribution &times; ' + s.employeePercent + '%', money(qe.employeeGross), 'subtotal') +
+          line('Total into the pension', money(qe.total), 'total')
         ) : '<p class="small text-body-secondary mb-0">Enter a gross pay figure for this payslip.</p>') +
       '</div></div>';
 
     var actualCard =
       '<div class="card"><div class="card-header py-2 bg-body">' +
-        '<span class="fw-semibold">Payslip actually shows</span>' +
-        '<span class="d-block formula">Gross employee contribution = deduction &divide; (1 &minus; ' +
-          (reliefRate / 100) + ')</span>' +
+        '<span class="fw-semibold">What actually happened</span>' +
+        '<span class="d-block formula">The first two lines are on your payslip. The relief is added afterwards ' +
+          'by the provider, so it never appears there.</span>' +
       '</div><div class="card-body py-2">' +
-        line('Employer contribution', money(actual.employer)) +
-        line('Employee deduction from pay', money(actual.employeeNet)) +
-        line('Derived employee gross contribution', money(actual.employeeGross)) +
-        line('&nbsp;&nbsp;of which relief claimed by the scheme', money(actual.taxRelief)) +
-        line('Total into pension', money(actual.total), 'total') +
+        line('Employer contribution <span class="badge text-bg-light border fw-normal">payslip</span>',
+          money(actual.employer)) +
+        line('Taken from your pay <span class="badge text-bg-light border fw-normal">payslip</span>',
+          money(actual.employeeNet)) +
+        line('Tax relief reclaimed by the provider', money(actual.taxRelief)) +
+        line('Your contribution into the pension', money(actual.employeeGross), 'subtotal') +
+        line('Total into the pension', money(actual.total), 'total') +
         (row.effectiveRates.available ? (
           '<p class="formula mt-2 mb-1">Effective rates against pensionable pay of ' +
             money(row.effectiveRates.earnings) + '</p>' +
           effectiveLine('Employer', row.effectiveRates.employer, row.effectiveRates.targetEmployer) +
-          effectiveLine('Employee gross', row.effectiveRates.employeeGross, row.effectiveRates.targetEmployeeGross) +
+          effectiveLine('Your contribution, incl. relief', row.effectiveRates.employeeGross, row.effectiveRates.targetEmployeeGross) +
           effectiveLine('Combined', row.effectiveRates.total, row.effectiveRates.targetTotal)
         ) : '') +
         (actual.isComplete ? '' :
@@ -797,10 +799,10 @@
         '<span class="d-block formula">Expected on base salary &minus; actual</span>' +
       '</div><div class="card-body py-2">' +
         (base.available ? (
-          differenceLine('Employer', d.employer) +
-          differenceLine('Employee gross contribution', d.employeeGross) +
-          differenceLine('Employee deduction from pay', d.employeeNet) +
+          differenceLine('Employer contribution', d.employer) +
+          differenceLine('Taken from your pay', d.employeeNet) +
           differenceLine('Tax relief', d.taxRelief) +
+          differenceLine('Your contribution, incl. relief', d.employeeGross) +
           differenceLine('Overall pension funding', d.total, 'total') +
           '<div class="detail-line"><span class="label">Cumulative to this pay date</span>' +
             '<span class="value">' + signedMoney(row.cumulativeShortfall) + '</span></div>' +
@@ -1104,10 +1106,10 @@
       '<div class="row g-3">' +
         '<div class="col-12 col-sm-6 col-lg-4">' +
           '<div class="border rounded p-2 h-100">' +
-            '<div class="stat-label mb-1">Gross employee contributions made</div>' +
+            '<div class="stat-label mb-1">Your contributions into the pension</div>' +
             '<div class="fw-semibold">' + money(t.actualEmployeeGross) + '</div>' +
-            '<div class="stat-sub">Deductions ' + money(t.actualEmployeeNet) + ' plus scheme relief ' +
-              money(t.actualTaxRelief) + '</div>' +
+            '<div class="stat-sub">' + money(t.actualEmployeeNet) + ' taken from your pay, plus ' +
+              money(t.actualTaxRelief) + ' relief reclaimed by the provider</div>' +
           '</div>' +
         '</div>' +
         '<div class="col-12 col-sm-6 col-lg-4">' +
@@ -1314,11 +1316,13 @@
     var headers = [
       'Pay date', 'Pay period', 'Gross pay', 'Pensionable pay',
       'Period QE lower threshold', 'Period QE upper threshold', 'Qualifying earnings',
-      'Expected employer (base)', 'Expected employee gross (base)', 'Expected employee deduction (base)',
-      'Expected tax relief (base)', 'Expected total (base)',
-      'Expected employer (QE)', 'Expected employee gross (QE)', 'Expected employee deduction (QE)', 'Expected total (QE)',
-      'Actual employer', 'Actual employee deduction', 'Actual employee gross', 'Actual relief claimed', 'Actual total',
-      'Employer difference', 'Employee gross difference', 'Employee deduction difference', 'Tax relief difference',
+      'Expected employer (base)', 'Expected employee total incl. relief (base)',
+      'Expected taken from pay (base)', 'Expected tax relief (base)', 'Expected total (base)',
+      'Expected employer (QE)', 'Expected employee total incl. relief (QE)',
+      'Expected taken from pay (QE)', 'Expected total (QE)',
+      'Actual employer', 'Actual taken from pay', 'Actual employee total incl. relief',
+      'Actual tax relief reclaimed', 'Actual total',
+      'Employer difference', 'Employee total difference', 'Taken from pay difference', 'Tax relief difference',
       'Total difference', 'Cumulative total difference', 'Difference type',
       'Effective employer %', 'Effective employee gross %', 'Effective combined %',
       'Stated employer %', 'Stated employee gross %',

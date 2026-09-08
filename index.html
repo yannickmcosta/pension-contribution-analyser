@@ -128,7 +128,7 @@
           <div class="card-body">
             <p class="stat-label"><i class="bi bi-piggy-bank" aria-hidden="true"></i> Expected total pension funding <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="Everything that should have gone into your pension: the employer contribution plus your own contribution including the tax relief the provider reclaims." aria-label="About expected total pension funding"><i class="bi bi-question-circle" aria-hidden="true"></i></button></p>
             <p class="stat-value" id="stat-expected-total">—</p>
-            <p class="stat-sub">Employer + employee gross</p>
+            <p class="stat-sub">Employer + your contribution, incl. tax relief</p>
           </div>
         </div>
       </div>
@@ -137,7 +137,7 @@
           <div class="card-body">
             <p class="stat-label"><i class="bi bi-piggy-bank-fill" aria-hidden="true"></i> Actual total pension funding <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="Everything that actually went in, including the tax relief. This is more than the amount taken off your payslip." aria-label="About actual total pension funding"><i class="bi bi-question-circle" aria-hidden="true"></i></button></p>
             <p class="stat-value" id="stat-actual-total">—</p>
-            <p class="stat-sub" id="stat-actual-total-rate">Employer + derived employee gross</p>
+            <p class="stat-sub" id="stat-actual-total-rate">Employer + your contribution, incl. tax relief</p>
           </div>
         </div>
       </div>
@@ -236,7 +236,7 @@
                         aria-label="About base or pensionable pay"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
               </th>
               <th scope="col" class="text-end col-money">
-                Actual employee deduction
+                Taken from your pay
                 <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip"
                         title="The pension amount deducted from your net pay, exactly as printed on the payslip."
                         aria-label="About the actual employee deduction"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
@@ -314,6 +314,16 @@
           </button>
         </div>
       </div>
+      <div class="alert alert-info d-flex align-items-start gap-2 small mb-0 rounded-0 border-start-0 border-end-0" role="note">
+        <i class="bi bi-info-circle flex-shrink-0 mt-1" aria-hidden="true"></i>
+        <div>
+          <strong>Employee columns include tax relief, so they are bigger than your payslip deduction.</strong>
+          Under Relief at Source the amount taken off your pay is only part of your contribution &mdash; the provider
+          reclaims the rest from HMRC and adds it to your pot. If your payslip says one figure and the
+          &ldquo;employee&rdquo; column here says a larger one, that difference is the tax relief, not an error.
+          Expand any row to see the two amounts separately.
+        </div>
+      </div>
       <div class="table-responsive">
         <table class="table table-sm table-hover align-middle mb-0 analysis-table">
           <caption class="visually-hidden">Analysis of each payslip against base salary and qualifying earnings.</caption>
@@ -326,8 +336,8 @@
               <th scope="col" class="text-end">Expected employer</th>
               <th scope="col" class="text-end">Actual employer</th>
               <th scope="col" class="text-end">Employer difference</th>
-              <th scope="col" class="text-end">Expected employee gross</th>
-              <th scope="col" class="text-end">Actual employee gross</th>
+              <th scope="col" class="text-end">Expected employee<span class="d-block fw-normal text-body-secondary">incl. tax relief <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="Everything going into the pension from you: the amount taken off your payslip PLUS the basic-rate tax relief the provider reclaims from HMRC. It is therefore larger than the deduction printed on your payslip." aria-label="About employee contributions including relief"><i class="bi bi-question-circle" aria-hidden="true"></i></button></span></th>
+              <th scope="col" class="text-end">Actual employee<span class="d-block fw-normal text-body-secondary">incl. tax relief</span></th>
               <th scope="col" class="text-end">Employee difference</th>
               <th scope="col" class="text-end">Expected total</th>
               <th scope="col" class="text-end">Actual total</th>
