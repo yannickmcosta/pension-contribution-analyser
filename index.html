@@ -63,6 +63,12 @@
     </div>
   </div>
 
+  <!-- Verdict ---------------------------------------------------------- -->
+  <section aria-labelledby="verdict-heading" class="mb-4">
+    <h2 class="visually-hidden" id="verdict-heading">Overall finding</h2>
+    <div id="verdict-panel" aria-live="polite"></div>
+  </section>
+
   <!-- Summary dashboard ---------------------------------------------- -->
   <section aria-labelledby="summary-heading" class="mb-4">
     <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2 mb-3">
@@ -74,7 +80,7 @@
       <div class="col-6 col-lg-3">
         <div class="card h-100 border-start border-4 border-secondary">
           <div class="card-body">
-            <p class="stat-label"><i class="bi bi-cash-stack" aria-hidden="true"></i> Total gross pay analysed</p>
+            <p class="stat-label"><i class="bi bi-cash-stack" aria-hidden="true"></i> Total gross pay analysed <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="The total pay across every period being audited. Divide by the number of payslips to sanity-check it." aria-label="About total gross pay analysed"><i class="bi bi-question-circle" aria-hidden="true"></i></button></p>
             <p class="stat-value" id="stat-gross">—</p>
             <p class="stat-sub" id="stat-range">No payslips entered yet</p>
             <p class="stat-sub" id="stat-pensionable">Pensionable pay: —</p>
@@ -84,7 +90,7 @@
       <div class="col-6 col-lg-3">
         <div class="card h-100 border-start border-4 border-primary">
           <div class="card-body">
-            <p class="stat-label"><i class="bi bi-building" aria-hidden="true"></i> Expected employer contributions</p>
+            <p class="stat-label"><i class="bi bi-building" aria-hidden="true"></i> Expected employer contributions <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="What your employer should have paid, if contributions are calculated on the pay figure your scheme says they use." aria-label="About expected employer contributions"><i class="bi bi-question-circle" aria-hidden="true"></i></button></p>
             <p class="stat-value" id="stat-expected-employer">—</p>
             <p class="stat-sub">If calculated on base/pensionable pay</p>
           </div>
@@ -93,7 +99,7 @@
       <div class="col-6 col-lg-3">
         <div class="card h-100 border-start border-4 border-info">
           <div class="card-body">
-            <p class="stat-label"><i class="bi bi-receipt" aria-hidden="true"></i> Actual employer contributions</p>
+            <p class="stat-label"><i class="bi bi-receipt" aria-hidden="true"></i> Actual employer contributions <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="What your employer actually paid, added up from your payslips." aria-label="About actual employer contributions"><i class="bi bi-question-circle" aria-hidden="true"></i></button></p>
             <p class="stat-value" id="stat-actual-employer">—</p>
             <p class="stat-sub" id="stat-actual-employer-rate">As recorded on your payslips</p>
           </div>
@@ -102,7 +108,7 @@
       <div class="col-6 col-lg-3">
         <div class="card h-100 border-start border-4 border-secondary" id="card-employer-shortfall">
           <div class="card-body">
-            <p class="stat-label"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Employer contribution difference</p>
+            <p class="stat-label"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Employer contribution difference <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="Expected minus actual. A shortfall means less went in than the stated basis gives; an overpayment means more did." aria-label="About employer contribution difference"><i class="bi bi-question-circle" aria-hidden="true"></i></button></p>
             <p class="stat-value" id="stat-employer-shortfall">—</p>
             <p class="stat-sub" id="stat-employer-shortfall-label">—</p>
           </div>
@@ -111,7 +117,7 @@
       <div class="col-6 col-lg-3">
         <div class="card h-100 border-start border-4 border-secondary">
           <div class="card-body">
-            <p class="stat-label"><i class="bi bi-list-check" aria-hidden="true"></i> Detected calculation basis</p>
+            <p class="stat-label"><i class="bi bi-list-check" aria-hidden="true"></i> Detected calculation basis <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="Which pay figure your payslips appear to be calculated on, judged for each period against the two possibilities." aria-label="About detected calculation basis"><i class="bi bi-question-circle" aria-hidden="true"></i></button></p>
             <p class="stat-value fs-4" id="stat-payslip-count">Payslips analysed: 0</p>
             <ul class="list-unstyled stat-sub mb-0" id="stat-basis-counts"></ul>
           </div>
@@ -120,7 +126,7 @@
       <div class="col-6 col-lg-3">
         <div class="card h-100 border-start border-4 border-primary">
           <div class="card-body">
-            <p class="stat-label"><i class="bi bi-piggy-bank" aria-hidden="true"></i> Expected total pension funding</p>
+            <p class="stat-label"><i class="bi bi-piggy-bank" aria-hidden="true"></i> Expected total pension funding <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="Everything that should have gone into your pension: the employer contribution plus your own contribution including the tax relief the provider reclaims." aria-label="About expected total pension funding"><i class="bi bi-question-circle" aria-hidden="true"></i></button></p>
             <p class="stat-value" id="stat-expected-total">—</p>
             <p class="stat-sub">Employer + employee gross</p>
           </div>
@@ -129,7 +135,7 @@
       <div class="col-6 col-lg-3">
         <div class="card h-100 border-start border-4 border-info">
           <div class="card-body">
-            <p class="stat-label"><i class="bi bi-piggy-bank-fill" aria-hidden="true"></i> Actual total pension funding</p>
+            <p class="stat-label"><i class="bi bi-piggy-bank-fill" aria-hidden="true"></i> Actual total pension funding <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="Everything that actually went in, including the tax relief. This is more than the amount taken off your payslip." aria-label="About actual total pension funding"><i class="bi bi-question-circle" aria-hidden="true"></i></button></p>
             <p class="stat-value" id="stat-actual-total">—</p>
             <p class="stat-sub" id="stat-actual-total-rate">Employer + derived employee gross</p>
           </div>
@@ -138,7 +144,7 @@
       <div class="col-6 col-lg-3">
         <div class="card h-100 border-start border-4 border-secondary" id="card-total-shortfall">
           <div class="card-body">
-            <p class="stat-label"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i> Overall pension funding difference</p>
+            <p class="stat-label"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i> Overall pension funding difference <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="The total gap between what should have gone into your pension and what did." aria-label="About overall pension funding difference"><i class="bi bi-question-circle" aria-hidden="true"></i></button></p>
             <p class="stat-value" id="stat-total-shortfall">—</p>
             <p class="stat-sub" id="stat-total-shortfall-label">—</p>
           </div>
@@ -214,23 +220,42 @@
           <caption class="visually-hidden">Editable payslip entries. Each row is one pay period.</caption>
           <thead class="table-light">
             <tr>
-              <th scope="col" class="col-date">Pay date</th>
-              <th scope="col" class="col-period">Pay period / description</th>
-              <th scope="col" class="text-end col-money">Gross pay</th>
+              <th scope="col" class="col-date">Pay date <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="The date on your payslip, usually the day you were paid." aria-label="About the pay date"><i class="bi bi-question-circle" aria-hidden="true"></i></button></th>
+              <th scope="col" class="col-period">Pay period / description <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="Optional label such as August 2026. It only helps you find the row again." aria-label="About the pay period"><i class="bi bi-question-circle" aria-hidden="true"></i></button></th>
+              <th scope="col" class="col-status">
+                Status
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip"
+                        title="Mark periods where no contribution was due (before enrolment, opted out, a contribution break, unpaid leave) so they are left out of the totals. Mark periods where a contribution was due but nothing was paid so they count as a shortfall without being read as a calculation basis."
+                        aria-label="About period status"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
+              </th>
+              <th scope="col" class="text-end col-money">Gross pay <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="Your total pay for the period before tax and other deductions, as printed on the payslip." aria-label="About gross pay"><i class="bi bi-question-circle" aria-hidden="true"></i></button></th>
               <th scope="col" class="text-end col-money">
                 Base/pensionable pay
-                <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn" data-bs-toggle="tooltip"
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip"
                         title="Leave blank to use gross pay when the 'use gross pay as pensionable pay' setting is on. Enter a value to override it for this row."
                         aria-label="About base or pensionable pay"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
               </th>
               <th scope="col" class="text-end col-money">
                 Actual employee deduction
-                <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn" data-bs-toggle="tooltip"
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip"
                         title="The pension amount deducted from your net pay, exactly as printed on the payslip."
                         aria-label="About the actual employee deduction"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
               </th>
-              <th scope="col" class="text-end col-money">Actual employer contribution</th>
-              <th scope="col" class="col-notes">Notes</th>
+              <th scope="col" class="text-end col-money">Actual employer contribution <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="The amount your employer paid in, from the payslip. It is normally shown as a separate line from your own deduction." aria-label="About the employer contribution"><i class="bi bi-question-circle" aria-hidden="true"></i></button></th>
+              <th scope="col" class="text-end col-money provider-col d-none">
+                Provider employee amount
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip"
+                        title="The contribution taken from your pay, as recorded by your pension provider. Should equal the payslip deduction."
+                        aria-label="About the provider employee amount"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
+              </th>
+              <th scope="col" class="text-end col-money provider-col d-none">Provider employer amount <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="The employer contribution your pension provider says it received. Enter 0 if nothing arrived for this period; leave blank if you do not know yet." aria-label="About the provider employer amount"><i class="bi bi-question-circle" aria-hidden="true"></i></button></th>
+              <th scope="col" class="text-end col-money provider-col d-none">
+                Provider tax relief
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip"
+                        title="Basic-rate relief the provider reclaimed from HMRC. This independently confirms the gross employee contribution. It usually arrives a month or two later, so leave it blank for recent periods."
+                        aria-label="About provider tax relief"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
+              </th>
+              <th scope="col" class="col-notes">Notes <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="Anything you want to remember about this payslip. Not used in any calculation." aria-label="About notes"><i class="bi bi-question-circle" aria-hidden="true"></i></button></th>
               <th scope="col" class="text-end col-actions"><span class="visually-hidden">Row actions</span></th>
             </tr>
           </thead>
@@ -238,6 +263,25 @@
         </table>
       </div>
       <div class="card-body py-3 border-top" id="entry-empty" hidden>
+        <div class="guided-help" id="getting-started">
+          <h3 class="h6">New to this? Four steps.</h3>
+          <ol class="small mb-3">
+            <li class="mb-1"><strong>Open Settings</strong> and check three things: how often you are paid, the
+              contribution percentages your scheme quotes, and what your scheme says those percentages are
+              calculated on. All of that is in your pension enrolment letter.</li>
+            <li class="mb-1"><strong>Add a payslip</strong> and copy across four figures from it: your gross pay,
+              the pension amount deducted from your pay, and the employer contribution. Leave the pensionable pay
+              box empty unless your pensionable pay differs from your gross pay.</li>
+            <li class="mb-1"><strong>Repeat for each payslip</strong> you want to check. Use
+              <em>Duplicate Last</em> when the figures are the same.</li>
+            <li><strong>Read the banner at the top.</strong> It states plainly whether your contributions match
+              what your scheme says, and if not, by how much.</li>
+          </ol>
+          <p class="small text-body-secondary">
+            You do not need to understand pensions to use this. Enter what your payslip says and the tool explains
+            the rest. Nothing you type leaves this browser.
+          </p>
+        </div>
         <p class="mb-2 text-body-secondary">No payslips have been added yet.</p>
         <button type="button" class="btn btn-primary btn-sm" id="btn-add-first">
           <i class="bi bi-plus-lg" aria-hidden="true"></i> Add your first payslip
@@ -540,7 +584,7 @@
                 <div class="form-text" id="set-annual-salary-help">Used to suggest pay figures for new payslips.</div>
               </div>
               <div class="col-12 col-md-3">
-                <label class="form-label" for="set-frequency">Pay frequency</label>
+                <label class="form-label" for="set-frequency">Pay frequency <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="How often you are paid. This decides the earnings thresholds used for each pay period." aria-label="About pay frequency"><i class="bi bi-question-circle" aria-hidden="true"></i></button></label>
                 <select class="form-select" id="set-frequency"></select>
               </div>
             </div>
@@ -550,17 +594,29 @@
             <legend class="h6 text-uppercase text-body-secondary">Contribution settings</legend>
             <div class="row g-3">
               <div class="col-12 col-md-4">
-                <label class="form-label" for="set-employer-pct">Employer contribution</label>
+                <label class="form-label" for="set-employer-pct">Employer contribution <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="The percentage your employer says it pays in. Take it from your enrolment letter or scheme booklet." aria-label="About the employer percentage"><i class="bi bi-question-circle" aria-hidden="true"></i></button></label>
                 <div class="input-group">
                   <input type="number" class="form-control" id="set-employer-pct" min="0" max="100" step="0.01" inputmode="decimal">
                   <span class="input-group-text">%</span>
                 </div>
               </div>
               <div class="col-12 col-md-4">
-                <label class="form-label" for="set-employee-pct">Employee gross contribution</label>
+                <label class="form-label" for="set-employee-pct">Employee gross contribution <button type="button" class="btn btn-link btn-sm p-0 align-baseline info-btn help-tip" data-bs-toggle="tooltip" title="The percentage you contribute. Under relief at source this is the total going into your pension, not the smaller amount taken off your payslip." aria-label="About the employee percentage"><i class="bi bi-question-circle" aria-hidden="true"></i></button></label>
                 <div class="input-group">
                   <input type="number" class="form-control" id="set-employee-pct" min="0" max="100" step="0.01" inputmode="decimal">
                   <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="set-stated-basis">What does your scheme say contributions are calculated on?</label>
+                <select class="form-select" id="set-stated-basis" aria-describedby="set-stated-basis-help">
+                  <option value="base">My base / pensionable salary</option>
+                  <option value="qualifying">Statutory qualifying earnings</option>
+                  <option value="unstated">Not stated, or I'm not sure</option>
+                </select>
+                <div class="form-text" id="set-stated-basis-help">
+                  Taken from your enrolment letter, scheme booklet or contract. The detected basis is judged against
+                  this, so it decides whether there is anything to raise.
                 </div>
               </div>
               <div class="col-12 col-md-4">
@@ -644,6 +700,34 @@
                   <option value="USD">USD — US dollar ($)</option>
                 </select>
               </div>
+              <div class="col-12">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" role="switch" id="set-guided-help" aria-describedby="set-guided-help-desc">
+                  <label class="form-check-label" for="set-guided-help">Show guided help and tooltips</label>
+                </div>
+                <div class="form-text" id="set-guided-help-desc">
+                  Plain-English explanations throughout, and a question mark beside anything that needs one.
+                  Turn it off once you are comfortable, for a cleaner screen.
+                </div>
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label" for="set-provider-name">Pension provider</label>
+                <input type="text" class="form-control" id="set-provider-name" maxlength="60" autocomplete="off"
+                       placeholder="e.g. NEST" aria-describedby="set-provider-help">
+                <div class="form-text" id="set-provider-help">Used in wording only.</div>
+              </div>
+              <div class="col-12 col-md-4 d-flex align-items-end">
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" role="switch" id="set-track-provider" aria-describedby="set-track-provider-help">
+                  <label class="form-check-label" for="set-track-provider">Record pension provider figures for cross-checking</label>
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="form-text mt-0" id="set-track-provider-help">
+                  Adds columns for the contribution and tax relief amounts your provider says it received, so you can
+                  confirm your payslip figures independently. Provider statements normally lag payroll by a month or two.
+                </div>
+              </div>
               <div class="col-12 col-md-4 d-flex align-items-end">
                 <div class="form-check form-switch mb-2">
                   <input class="form-check-input" type="checkbox" role="switch" id="set-use-gross" aria-describedby="set-use-gross-help">
@@ -667,6 +751,127 @@
         <div>
           <span class="small text-body-secondary me-2"><i class="bi bi-check2" aria-hidden="true"></i> Changes save automatically</span>
           <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Draft email modal --------------------------------------------------- -->
+<div class="modal fade" id="letterModal" tabindex="-1" aria-labelledby="letterModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="letterModalLabel"><i class="bi bi-envelope-paper" aria-hidden="true"></i> Draft an email to your employer</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="letter-blocked" hidden>
+          <div class="alert alert-success d-flex align-items-start gap-2" role="note">
+            <i class="bi bi-check-circle-fill flex-shrink-0 mt-1" aria-hidden="true"></i>
+            <div><strong>Nothing to raise.</strong> <span id="letter-blocked-reason"></span></div>
+          </div>
+        </div>
+
+        <div id="letter-builder" hidden>
+          <div class="alert alert-secondary small py-2" role="note" id="letter-variant-note"></div>
+
+          <div class="row g-4">
+            <div class="col-12 col-xl-5">
+              <form id="letter-form" novalidate>
+                <fieldset class="mb-3">
+                  <legend class="h6 text-uppercase text-body-secondary">Details only you know</legend>
+                  <div class="row g-3">
+                    <div class="col-12 col-sm-6">
+                      <label class="form-label" for="letter-recipient">Who it's addressed to</label>
+                      <input type="text" class="form-control form-control-sm" id="letter-recipient" maxlength="60"
+                             placeholder="HR contact name" autocomplete="off">
+                    </div>
+                    <div class="col-12 col-sm-6">
+                      <label class="form-label" for="letter-sender">Your name</label>
+                      <input type="text" class="form-control form-control-sm" id="letter-sender" maxlength="60" autocomplete="off">
+                    </div>
+                    <div class="col-12 col-sm-6">
+                      <label class="form-label" for="letter-enrolled">Enrolled in the scheme</label>
+                      <input type="text" class="form-control form-control-sm" id="letter-enrolled" maxlength="40"
+                             placeholder="e.g. July 2025" autocomplete="off">
+                    </div>
+                    <div class="col-12 col-sm-6">
+                      <label class="form-label" for="letter-response-by">Response requested by</label>
+                      <input type="date" class="form-control form-control-sm" id="letter-response-by">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label" for="letter-quote">Wording from your enrolment letter or scheme documentation</label>
+                      <textarea class="form-control form-control-sm" id="letter-quote" rows="3"
+                                placeholder="Paste the sentence that states how contributions are calculated."></textarea>
+                      <div class="form-text">Quoting their own wording back is the strongest part of the letter.</div>
+                    </div>
+                  </div>
+                </fieldset>
+
+                <fieldset class="mb-3">
+                  <legend class="h6 text-uppercase text-body-secondary">Optional</legend>
+                  <div class="row g-3">
+                    <div class="col-12 col-sm-6">
+                      <label class="form-label" for="letter-contract-entity">Employer named on your contract</label>
+                      <input type="text" class="form-control form-control-sm" id="letter-contract-entity" maxlength="80" autocomplete="off">
+                    </div>
+                    <div class="col-12 col-sm-6">
+                      <label class="form-label" for="letter-provider-entity">Employer named on provider records</label>
+                      <input type="text" class="form-control form-control-sm" id="letter-provider-entity" maxlength="80" autocomplete="off">
+                      <div class="form-text">Only mentioned if these differ.</div>
+                    </div>
+                    <div class="col-12">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="letter-no-variable">
+                        <label class="form-check-label" for="letter-no-variable">My pay has no bonus, commission or other variable element</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="letter-colleagues">
+                        <label class="form-check-label" for="letter-colleagues">I've compared figures with colleagues on different salaries</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="letter-colleagues-raising">
+                        <label class="form-check-label" for="letter-colleagues-raising">Colleagues are raising the same issue separately</label>
+                      </div>
+                    </div>
+                  </div>
+                </fieldset>
+
+                <div class="alert alert-warning small py-2 mb-0" id="letter-placeholders" hidden role="note">
+                  <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                  <strong>Still to fill in:</strong> <span id="letter-placeholder-list"></span>
+                </div>
+              </form>
+            </div>
+
+            <div class="col-12 col-xl-7">
+              <label class="form-label fw-semibold" for="letter-preview">Preview</label>
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">Subject</span>
+                <input type="text" class="form-control" id="letter-subject" readonly aria-label="Email subject line">
+              </div>
+              <textarea class="form-control letter-preview" id="letter-preview" rows="22" readonly
+                        aria-label="Generated email text"></textarea>
+              <p class="form-text mb-0">
+                Read it through and edit it in your own words before sending. It is a starting point, not a submission.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <span class="small text-body-secondary">
+          <i class="bi bi-shield-lock" aria-hidden="true"></i> Generated in this browser. Nothing is sent anywhere.
+        </span>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-outline-primary" id="btn-letter-download">
+            <i class="bi bi-download" aria-hidden="true"></i> Download
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-letter-copy">
+            <i class="bi bi-clipboard" aria-hidden="true"></i> Copy to clipboard
+          </button>
         </div>
       </div>
     </div>
@@ -737,6 +942,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 <script src="calculations.js"></script>
+<script src="letter.js"></script>
 <script src="tests.js"></script>
 <script src="app.js"></script>
 </body>

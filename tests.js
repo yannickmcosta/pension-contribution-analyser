@@ -12,7 +12,10 @@
   var calc = (typeof module === 'object' && module.exports)
     ? require('./calculations.js')
     : root.PensionCalc;
-  var api = factory(calc);
+  var letter = (typeof module === 'object' && module.exports)
+    ? require('./letter.js')
+    : root.PensionLetter;
+  var api = factory(calc, letter);
   if (typeof module === 'object' && module.exports) {
     module.exports = api;
     if (require.main === module) {
@@ -22,7 +25,7 @@
   } else {
     root.runPensionAuditTests = api.run;
   }
-}(typeof self !== 'undefined' ? self : this, function (C) {
+}(typeof self !== 'undefined' ? self : this, function (C, L) {
   'use strict';
 
   function run(options) {
@@ -293,6 +296,300 @@
       C.sortAnalysedRows(sortRows, 'shortfall', 'desc')[0].id, '1');
     assertEqual('Sort: by basis puts base-salary matches first',
       C.sortAnalysedRows(sortRows, 'basis', 'asc')[0].id, '2');
+
+    /* ---- Provider reconciliation -------------------------------- */
+    var recActual = C.deriveActualContribution(48, 40, baseSettings);
+    var recGood = C.reconcileProviderData(
+      { providerEmployeeNet: 48, providerEmployer: 40, providerTaxRelief: 12 }, recActual, 0.02);
+    assertEqual('Provider data: matching figures reconcile', recGood.allMatch, true);
+    assertEqual('Provider data: relief confirms the derived gross', recGood.taxRelief.matches, true);
+    assertEqual('Provider data: no mismatches counted', recGood.mismatches, 0);
+
+    var recBad = C.reconcileProviderData(
+      { providerEmployeeNet: 48, providerEmployer: 55, providerTaxRelief: 12 }, recActual, 0.02);
+    assertEqual('Provider data: a differing employer amount is flagged', recBad.allMatch, false);
+    assertMoney('Provider data: the difference is reported', recBad.employer.difference, 15);
+
+    var recPending = C.reconcileProviderData(
+      { providerEmployeeNet: 48, providerEmployer: 40 }, recActual, 0.02);
+    assertEqual('Provider data: missing relief is treated as pending, not a mismatch', recPending.reliefPending, true);
+    assertEqual('Provider data: pending relief still reconciles', recPending.allMatch, true);
+
+    var recNone = C.reconcileProviderData({}, recActual, 0.02);
+    assertEqual('Provider data: absent entirely', recNone.hasData, false);
+
+    /* ---- Verdict ------------------------------------------------- */
+    function verdictFor(stated, net, employer) {
+      return C.analyseAll([
+        { id: 'v1', date: '2026-01-31', grossPay: 2000, actualEmployeeNet: net, actualEmployer: employer }
+      ], Object.assign({}, baseSettings, { statedBasis: stated })).verdict;
+    }
+    assertEqual('Verdict: told base salary, paid qualifying earnings -> shortfall',
+      verdictFor('base', 48, 40).key, C.VERDICT.SHORTFALL);
+    assertEqual('Verdict: a shortfall is actionable', verdictFor('base', 48, 40).actionable, true);
+    assertEqual('Verdict: told qualifying earnings, paid qualifying earnings -> as stated',
+      verdictFor('qualifying', 48, 40).key, C.VERDICT.AS_STATED);
+    assertEqual('Verdict: as stated is not actionable', verdictFor('qualifying', 48, 40).actionable, false);
+    assertEqual('Verdict: told base salary, paid base salary -> as stated',
+      verdictFor('base', 96, 80).key, C.VERDICT.AS_STATED);
+    assertEqual('Verdict: told qualifying earnings but paid on salary -> better than stated',
+      verdictFor('qualifying', 96, 80).key, C.VERDICT.BETTER_THAN_STATED);
+    assertEqual('Verdict: matches neither basis',
+      verdictFor('base', 11.11, 7.77).key, C.VERDICT.UNMATCHED);
+    assertEqual('Verdict: basis not recorded',
+      verdictFor('unstated', 48, 40).key, C.VERDICT.UNKNOWN_BASIS);
+    assertEqual('Verdict: no actual figures at all',
+      verdictFor('base', null, null).key, C.VERDICT.INSUFFICIENT);
+    assertEqual('Verdict: no payslips',
+      C.analyseAll([], baseSettings).verdict.key, C.VERDICT.NO_DATA);
+
+    var mixedVerdict = C.analyseAll([
+      { id: 'm1', date: '2026-01-31', grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40 },
+      { id: 'm2', date: '2026-02-28', grossPay: 2000, actualEmployeeNet: 96, actualEmployer: 80 }
+    ], baseSettings).verdict;
+    assertEqual('Verdict: periods on different bases are reported as mixed', mixedVerdict.key, C.VERDICT.MIXED);
+
+    /* ---- Uniformity ---------------------------------------------- */
+    var uniform = C.analyseAll([
+      { id: 'u1', date: '2026-01-31', grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40 },
+      { id: 'u2', date: '2026-02-28', grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40 }
+    ], baseSettings).uniformity;
+    assertEqual('Uniformity: identical periods are uniform', uniform.uniform, true);
+    var varied = C.analyseAll([
+      { id: 'u1', date: '2026-01-31', grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40 },
+      { id: 'u2', date: '2026-02-28', grossPay: 2500, actualEmployeeNet: 48, actualEmployer: 40 }
+    ], baseSettings).uniformity;
+    assertEqual('Uniformity: a pay change is detected', varied.uniform, false);
+    assertEqual('Uniformity: distinct pay figures counted', varied.distinctPensionablePay, 2);
+
+    /* ---- Letter composer ------------------------------------------ */
+    function analysisFor(stated, net, employer) {
+      return C.analyseAll([
+        { id: 'l1', date: '2026-01-31', grossPay: 2000, actualEmployeeNet: net, actualEmployer: employer },
+        { id: 'l2', date: '2026-02-28', grossPay: 2000, actualEmployeeNet: net, actualEmployer: employer }
+      ], Object.assign({}, baseSettings, { statedBasis: stated }));
+    }
+
+    assertEqual('Letter: refused when contributions match the stated basis',
+      L.compose(analysisFor('qualifying', 48, 40), {}).canGenerate, false);
+    assertEqual('Letter: refused when paid on the stated salary basis',
+      L.compose(analysisFor('base', 96, 80), {}).canGenerate, false);
+    assertEqual('Letter: refused when there are no payslips',
+      L.compose(C.analyseAll([], baseSettings), {}).canGenerate, false);
+    assertEqual('Letter: refused when actual figures are missing',
+      L.compose(analysisFor('base', null, null), {}).canGenerate, false);
+    assertEqual('Letter: a refusal explains why',
+      L.compose(analysisFor('qualifying', 48, 40), {}).reason.length > 0, true);
+
+    var shortfallLetter = L.compose(analysisFor('base', 48, 40), {
+      recipientName: 'A Person', senderName: 'B Person', enrolmentPeriod: 'January 2026',
+      schemeQuote: 'Contributions are calculated on your base salary.', responseBy: '01/02/2026'
+    });
+    assertEqual('Letter: generated for a shortfall', shortfallLetter.canGenerate, true);
+    assertEqual('Letter: shortfall variant', shortfallLetter.variant, L.VARIANT.SHORTFALL);
+    assertEqual('Letter: no placeholders left when everything is supplied',
+      shortfallLetter.placeholders.length, 0);
+    assertEqual('Letter: addressed to the named recipient',
+      shortfallLetter.body.indexOf('Dear A Person,') === 0, true);
+    assertEqual('Letter: quotes the scheme wording',
+      shortfallLetter.body.indexOf('Contributions are calculated on your base salary.') > 0, true);
+    assertEqual('Letter: states the employer arrears',
+      shortfallLetter.body.indexOf('80.00') > 0, true);
+    assertEqual('Letter: signed off by the sender',
+      shortfallLetter.body.indexOf('B Person') > 0, true);
+    assertEqual('Letter: subject line set', shortfallLetter.subject.length > 0, true);
+
+    var bare = L.compose(analysisFor('base', 48, 40), {});
+    assertEqual('Letter: missing details are flagged as placeholders', bare.placeholders.length > 0, true);
+    assertEqual('Letter: recipient placeholder used', bare.body.indexOf('[HR CONTACT]') > 0, true);
+
+    assertEqual('Letter: enquiry variant when the stated basis is unknown',
+      L.compose(analysisFor('unstated', 48, 40), {}).variant, L.VARIANT.ENQUIRY);
+    assertEqual('Letter: unmatched variant when neither basis fits',
+      L.compose(analysisFor('base', 11.11, 7.77), {}).variant, L.VARIANT.UNMATCHED);
+
+    var withColleagues = L.compose(analysisFor('base', 48, 40), { colleaguesCompared: true });
+    assertEqual('Letter: colleague comparison included on request',
+      withColleagues.body.indexOf('colleagues who are on different salaries') > 0, true);
+    assertEqual('Letter: colleague comparison omitted by default',
+      bare.body.indexOf('colleagues who are on different salaries'), -1);
+
+    var entities = L.compose(analysisFor('base', 48, 40),
+      { contractEntity: 'Company A', providerEntity: 'Company B' });
+    assertEqual('Letter: entity mismatch mentioned when the names differ',
+      entities.body.indexOf('Company A') > 0 && entities.body.indexOf('Company B') > 0, true);
+    var sameEntity = L.compose(analysisFor('base', 48, 40),
+      { contractEntity: 'Company A', providerEntity: 'Company A' });
+    assertEqual('Letter: entity paragraph omitted when the names match',
+      sameEntity.body.indexOf('whereas my'), -1);
+
+    var variedPay = C.analyseAll([
+      { id: 'p1', date: '2026-01-31', grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40 },
+      { id: 'p2', date: '2026-02-28', grossPay: 2400, actualEmployeeNet: 48, actualEmployer: 40 }
+    ], Object.assign({}, baseSettings, { statedBasis: 'base' }));
+    var variedLetter = L.compose(variedPay, {});
+    assertEqual('Letter: a pay change produces a period-by-period table instead of one monthly figure',
+      variedLetter.body.indexOf('period by period') > 0, true);
+
+    /* ---- Pay periods with no contributions ------------------------ */
+    var contributing = { grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40 };
+    function withStatuses(statuses) {
+      return C.analyseAll(statuses.map(function (st, i) {
+        var row = { id: 's' + i, date: '2026-0' + (i + 1) + '-28' };
+        if (st === null) { return Object.assign(row, contributing); }
+        return Object.assign(row, { grossPay: 2000, actualEmployeeNet: 0, actualEmployer: 0, status: st });
+      }), Object.assign({}, baseSettings, { statedBasis: 'base' }));
+    }
+
+    var clean = withStatuses([null, null, null]);
+    assertEqual('Zero periods: three contributing periods analysed', clean.counts.analysed, 3);
+    assertEqual('Zero periods: verdict is a shortfall', clean.verdict.key, C.VERDICT.SHORTFALL);
+
+    var unmarked = withStatuses([null, null, null, 'normal', 'normal']);
+    assertEqual('Zero periods: unmarked zero periods are read as matching no basis',
+      unmarked.counts.neither, 2);
+    assertEqual('Zero periods: and they drag the verdict to mixed', unmarked.verdict.key, C.VERDICT.MIXED);
+
+    var excluded = withStatuses([null, null, null, 'excluded', 'excluded']);
+    assertEqual('Excluded periods: counted separately', excluded.counts.excluded, 2);
+    assertEqual('Excluded periods: not analysed', excluded.counts.analysed, 3);
+    assertEqual('Excluded periods: total still counts every row entered', excluded.counts.total, 5);
+    assertEqual('Excluded periods: the verdict is no longer mixed', excluded.verdict.key, C.VERDICT.SHORTFALL);
+    assertMoney('Excluded periods: excluded from the shortfall',
+      excluded.totals.totalShortfall, clean.totals.totalShortfall);
+    assertMoney('Excluded periods: excluded from gross pay analysed',
+      excluded.totals.grossPay, clean.totals.grossPay);
+    assertEqual('Excluded periods: excluded from the basis count', excluded.counts.qualifying, 3);
+
+    var missed = withStatuses([null, null, null, 'missed', 'missed']);
+    assertEqual('Missed periods: counted separately', missed.counts.missed, 2);
+    assertEqual('Missed periods: included in the analysed count', missed.counts.analysed, 5);
+    assertEqual('Missed periods: do not count towards the detected basis', missed.counts.qualifying, 3);
+    assertEqual('Missed periods: verdict stays a shortfall', missed.verdict.key, C.VERDICT.SHORTFALL);
+    assertEqual('Missed periods: the verdict says so', missed.verdict.missedPeriods, 2);
+    assertMoney('Missed periods: the full expected amount counts as a shortfall',
+      C.roundMoney(missed.totals.totalShortfall - clean.totals.totalShortfall), 400.00);
+
+    var onBasisButMissed = C.analyseAll([
+      { id: 'b1', date: '2026-01-31', grossPay: 2000, actualEmployeeNet: 96, actualEmployer: 80 },
+      { id: 'b2', date: '2026-02-28', grossPay: 2000, actualEmployeeNet: 0, actualEmployer: 0, status: 'missed' }
+    ], Object.assign({}, baseSettings, { statedBasis: 'base' }));
+    assertEqual('Missed periods: still actionable even when the basis is right',
+      onBasisButMissed.verdict.key, C.VERDICT.SHORTFALL);
+    assertEqual('Missed periods: and the letter is about the missing periods',
+      L.compose(onBasisButMissed, {}).variant, L.VARIANT.MISSED);
+
+    var allExcluded = withStatuses(['excluded', 'excluded']);
+    assertEqual('Excluded periods: nothing left to analyse', allExcluded.verdict.key, C.VERDICT.NO_DATA);
+    assertEqual('Excluded periods: no letter when every period is excluded',
+      L.compose(allExcluded, {}).canGenerate, false);
+
+    var missedLetter = L.compose(missed, { recipientName: 'A', senderName: 'B',
+      enrolmentPeriod: 'January 2026', schemeQuote: 'Base salary.', responseBy: '01/06/2026' });
+    assertEqual('Letter: lists the periods where nothing was paid',
+      missedLetter.body.indexOf('No pension contributions were made at all') > 0, true);
+    assertEqual('Letter: asks about them separately',
+      missedLetter.body.indexOf('why no contributions were made') > 0, true);
+    assertEqual('Letter: counts only the periods where contributions were due',
+      missedLetter.body.indexOf('Across the 5 pay periods') > 0, true);
+
+    var excludedLetter = L.compose(excluded, { recipientName: 'A', senderName: 'B',
+      enrolmentPeriod: 'January 2026', schemeQuote: 'Base salary.', responseBy: '01/06/2026' });
+    assertEqual('Letter: excluded periods are left out of the period count',
+      excludedLetter.body.indexOf('Across the 3 pay periods') > 0, true);
+    assertEqual('Letter: and it says the count is of periods where contributions were due',
+      excludedLetter.body.indexOf('in which contributions were due') > 0, true);
+    assertEqual('Letter: no missing-contribution paragraph when there are none',
+      excludedLetter.body.indexOf('No pension contributions were made at all'), -1);
+
+    /* ---- Prompt to classify an unmarked empty period --------------- */
+    var emptyRow = C.analysePayslip(
+      { id: 'e1', grossPay: 2000, actualEmployeeNet: 0, actualEmployer: 0 }, baseSettings);
+    assertEqual('An unmarked zero period is flagged for classification', emptyRow.looksEmpty, true);
+    assertEqual('...with a warning explaining what to do',
+      emptyRow.warnings.some(function (w) { return w.indexOf('Set its status') >= 0; }), true);
+    var normalRow = C.analysePayslip(
+      { id: 'e2', grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40 }, baseSettings);
+    assertEqual('A contributing period is not flagged', normalRow.looksEmpty, false);
+    assertEqual('An excluded period does not warn about missing figures',
+      C.analysePayslip({ id: 'e3', grossPay: 2000, status: 'excluded' }, baseSettings).warnings.length, 0);
+
+    /* ---- Deducted from pay but never received by the scheme ------- */
+    function remittance(providerEmployee, providerEmployer) {
+      var row = { id: 'nr', date: '2026-01-31', grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40 };
+      if (providerEmployee !== undefined) { row.providerEmployeeNet = providerEmployee; }
+      if (providerEmployer !== undefined) { row.providerEmployer = providerEmployer; }
+      return C.analyseAll([row], Object.assign({}, baseSettings, { statedBasis: 'qualifying' }));
+    }
+
+    var notPaid = remittance(0, 0);
+    assertEqual('Remittance: a nil provider figure against a payslip deduction is flagged',
+      notPaid.counts.notRemitted, 1);
+    assertMoney('Remittance: the amount that never arrived', notPaid.totals.notRemitted, 88.00);
+    assertEqual('Remittance: the row is marked', notPaid.rows[0].notRemitted, true);
+    assertEqual('Remittance: it warns in plain words',
+      notPaid.rows[0].warnings.some(function (w) { return w.indexOf('not received by the scheme') >= 0; }), true);
+
+    var employeeOnly = remittance(0, 40);
+    assertEqual('Remittance: employee money missing is detected on its own',
+      employeeOnly.rows[0].providerCheck.employeeNotRemitted, true);
+    assertEqual('Remittance: employer money present is not flagged',
+      employeeOnly.rows[0].providerCheck.employerNotRemitted, false);
+    assertMoney('Remittance: only the missing part is counted', employeeOnly.totals.notRemitted, 48.00);
+
+    var pendingProvider = remittance(undefined, undefined);
+    assertEqual('Remittance: a blank provider figure is not treated as money missing',
+      pendingProvider.counts.notRemitted, 0);
+
+    var arrived = remittance(48, 40);
+    assertEqual('Remittance: matching provider figures raise nothing', arrived.counts.notRemitted, 0);
+
+    // Even where the basis matches what the scheme states, missing money is actionable.
+    assertEqual('Remittance: outranks a correct earnings basis',
+      notPaid.verdict.key, C.VERDICT.SHORTFALL);
+    assertEqual('Remittance: and is actionable', notPaid.verdict.actionable, true);
+    assertEqual('Remittance: the verdict counts the periods', notPaid.verdict.notRemittedPeriods, 1);
+    assertEqual('Remittance: a correct basis alone raises nothing',
+      arrived.verdict.key, C.VERDICT.AS_STATED);
+
+    var nrLetter = L.compose(notPaid, { recipientName: 'A', senderName: 'B',
+      enrolmentPeriod: 'January 2026', responseBy: '01/03/2026' });
+    assertEqual('Letter: unremitted contributions produce their own variant',
+      nrLetter.variant, L.VARIANT.NOT_REMITTED);
+    assertEqual('Letter: the subject names the problem',
+      nrLetter.subject.indexOf('not received by the scheme') > 0, true);
+    assertEqual('Letter: it leads with the missing money',
+      nrLetter.body.indexOf('has not received') > 0, true);
+    assertEqual('Letter: it lists the amounts and the period',
+      nrLetter.body.indexOf('31/01/2026') > 0, true);
+    assertEqual('Letter: it mentions the time limits for passing contributions on',
+      nrLetter.body.indexOf('within set time limits') > 0, true);
+    assertEqual('Letter: it asks where the money went first',
+      nrLetter.body.indexOf('1. Confirm what has happened to') > 0, true);
+    assertEqual('Letter: it asks whether colleagues are affected and whether trustees were told',
+      nrLetter.body.indexOf('reported to the scheme trustees') > 0, true);
+
+    // A basis discrepancy alongside missing money is raised as a secondary point.
+    var both = C.analyseAll([
+      { id: 'b1', date: '2026-01-31', grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40,
+        providerEmployeeNet: 48, providerEmployer: 40 },
+      { id: 'b2', date: '2026-02-28', grossPay: 2000, actualEmployeeNet: 48, actualEmployer: 40,
+        providerEmployeeNet: 0, providerEmployer: 0 }
+    ], Object.assign({}, baseSettings, { statedBasis: 'base' }));
+    var bothLetter = L.compose(both, { recipientName: 'A', senderName: 'B' });
+    assertEqual('Letter: missing money leads even when the basis is also wrong',
+      bothLetter.variant, L.VARIANT.NOT_REMITTED);
+    assertEqual('Letter: the basis point is still made, as a secondary item',
+      bothLetter.body.indexOf('Separately, confirm the earnings basis') > 0, true);
+    assertEqual('Letter: the earnings basis is not asked about twice',
+      bothLetter.body.indexOf('1. Confirm the earnings basis'), -1);
+
+    /* ---- Guided help setting -------------------------------------- */
+    assertEqual('Guided help is on by default', C.normaliseSettings({}).guidedHelp, true);
+    assertEqual('Guided help can be turned off', C.normaliseSettings({ guidedHelp: false }).guidedHelp, false);
+    assertEqual('Guided help survives a round trip through import',
+      C.validateImport({ schemaVersion: 1, payslips: [], settings: { guidedHelp: false } }).data.settings.guidedHelp,
+      false);
 
     if (log && typeof console !== 'undefined') {
       results.forEach(function (r) {

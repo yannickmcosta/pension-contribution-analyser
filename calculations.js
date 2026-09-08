@@ -35,6 +35,22 @@
     INSUFFICIENT: 'insufficient'
   };
 
+  /**
+   * What kind of pay period a row is. Periods where no contribution was due
+   * must not be treated as shortfalls, and periods where one was due but
+   * nothing was paid must not be treated as evidence of a calculation basis.
+   */
+  var PERIOD_STATUS = {
+    NORMAL: 'normal',
+    EXCLUDED: 'excluded',
+    MISSED: 'missed'
+  };
+
+  var PERIOD_STATUS_LABELS = {};
+  PERIOD_STATUS_LABELS[PERIOD_STATUS.NORMAL] = 'Contributing period';
+  PERIOD_STATUS_LABELS[PERIOD_STATUS.EXCLUDED] = 'No contributions due';
+  PERIOD_STATUS_LABELS[PERIOD_STATUS.MISSED] = 'Contributions missed';
+
   var BASIS_LABELS = {};
   BASIS_LABELS[BASIS.BASE] = 'Matches Base Salary';
   BASIS_LABELS[BASIS.QE] = 'Matches Qualifying Earnings';
@@ -56,6 +72,12 @@
     tolerance: 0.02,
     currency: 'GBP',
     useGrossAsPensionable: true,
+    // The basis your scheme documentation says contributions are calculated
+    // on. This is what the detected basis is judged against.
+    statedBasis: 'base',
+    providerName: 'NEST',
+    trackProviderData: false,
+    guidedHelp: true,
     marginalTaxRatePercent: 40,
     showHigherRatePanel: false
   };
@@ -205,6 +227,11 @@
     s.currency = typeof input.currency === 'string' && input.currency.length === 3
       ? input.currency.toUpperCase() : 'GBP';
     s.useGrossAsPensionable = input.useGrossAsPensionable !== false;
+    s.statedBasis = ['base', 'qualifying', 'unstated'].indexOf(input.statedBasis) >= 0
+      ? input.statedBasis : DEFAULT_SETTINGS.statedBasis;
+    s.providerName = typeof input.providerName === 'string' ? input.providerName.slice(0, 60) : DEFAULT_SETTINGS.providerName;
+    s.trackProviderData = input.trackProviderData === true;
+    s.guidedHelp = input.guidedHelp !== false;
     s.marginalTaxRatePercent = clamp(toNumber(input.marginalTaxRatePercent, DEFAULT_SETTINGS.marginalTaxRatePercent), 0, 100);
     s.showHigherRatePanel = input.showHigherRatePanel === true;
     return s;
@@ -389,6 +416,59 @@
   }
 
   /**
+   * Cross-check the payslip figures against what the pension provider says it
+   * received. The tax relief comparison is the useful one: it independently
+   * confirms the gross employee contribution derived from the net deduction.
+   */
+  function reconcileProviderData(payslip, actual, tolerance) {
+    var tol = Math.max(0, toNumber(tolerance, 0.02));
+    var pEmployee = toNumberOrNull(payslip.providerEmployeeNet);
+    var pEmployer = toNumberOrNull(payslip.providerEmployer);
+    var pRelief = toNumberOrNull(payslip.providerTaxRelief);
+
+    function compare(provider, derived) {
+      if (provider === null || derived === null || derived === undefined) { return null; }
+      return {
+        provider: roundMoney(provider),
+        expected: roundMoney(derived),
+        difference: roundMoney(provider - derived),
+        matches: Math.abs(provider - derived) <= tol
+      };
+    }
+
+    var employee = compare(pEmployee, actual.employeeNet);
+    var employer = compare(pEmployer, actual.employer);
+    var relief = compare(pRelief, actual.taxRelief);
+    var checks = [employee, employer, relief].filter(function (c) { return c !== null; });
+
+    // Money shown as deducted from pay that the scheme says it never received
+    // is a different and more serious matter than a calculation basis. A blank
+    // provider figure means "not recorded yet"; an explicit zero means nothing
+    // arrived, which is what this looks for.
+    var employeeNotRemitted = pEmployee !== null && roundMoney(pEmployee) === 0 &&
+      actual.employeeNet !== null && roundMoney(actual.employeeNet) > tol;
+    var employerNotRemitted = pEmployer !== null && roundMoney(pEmployer) === 0 &&
+      actual.employer !== null && roundMoney(actual.employer) > tol;
+
+    return {
+      hasData: checks.length > 0,
+      employee: employee,
+      employer: employer,
+      taxRelief: relief,
+      // Relief is claimed from HMRC weeks after the contribution, so a missing
+      // relief figure is normal for recent periods rather than a discrepancy.
+      reliefPending: pRelief === null && (pEmployee !== null || pEmployer !== null),
+      allMatch: checks.length > 0 && checks.every(function (c) { return c.matches; }),
+      mismatches: checks.filter(function (c) { return !c.matches; }).length,
+      employeeNotRemitted: employeeNotRemitted,
+      employerNotRemitted: employerNotRemitted,
+      notRemitted: employeeNotRemitted || employerNotRemitted,
+      amountNotRemitted: roundMoney(
+        (employeeNotRemitted ? actual.employeeNet : 0) + (employerNotRemitted ? actual.employer : 0))
+    };
+  }
+
+  /**
    * D. Differences between an expected set of figures and the actual ones.
    * Positive = shortfall (expected more than was paid).
    * Negative = overpayment.
@@ -504,25 +584,59 @@
     var gross = toNumberOrNull(payslip.grossPay);
     var pensionable = resolvePensionablePay(payslip, s);
 
+    var status = [PERIOD_STATUS.NORMAL, PERIOD_STATUS.EXCLUDED, PERIOD_STATUS.MISSED]
+      .indexOf(payslip.status) >= 0 ? payslip.status : PERIOD_STATUS.NORMAL;
     var expectedBase = calculateExpectedBaseContribution(pensionable, s);
     var expectedQE = calculateExpectedQEContribution(gross, t, s);
     var actual = deriveActualContribution(payslip.actualEmployeeNet, payslip.actualEmployer, s);
+    var providerCheck = reconcileProviderData(payslip, actual, s.tolerance);
 
     var effectiveRates = calculateEffectiveRates(pensionable, actual, s);
     var differencesVsBase = calculateDifferences(expectedBase, actual);
     var differencesVsQE = calculateDifferences(expectedQE, actual);
-    var detection = detectContributionBasis(actual, expectedBase, expectedQE, s.tolerance);
+    // A period with no contribution due, or one where nothing was paid at all,
+    // tells you nothing about which earnings basis payroll is using.
+    var detection = (status === PERIOD_STATUS.NORMAL)
+      ? detectContributionBasis(actual, expectedBase, expectedQE, s.tolerance)
+      : {
+          basis: BASIS.INSUFFICIENT,
+          label: status === PERIOD_STATUS.EXCLUDED ? 'Not part of the audit' : 'Nothing paid',
+          ambiguous: false, partial: false, tolerance: s.tolerance,
+          base: { available: false, employerMatch: null, employeeMatch: null, matches: false },
+          qualifying: { available: false, employerMatch: null, employeeMatch: null, matches: false }
+        };
 
     var warnings = [];
     if (gross === null) { warnings.push('No gross pay entered.'); }
     if (pensionable === null) { warnings.push('No base/pensionable pay entered.'); }
-    if (!actual.hasEmployer) { warnings.push('No actual employer contribution entered.'); }
-    if (!actual.hasEmployee) { warnings.push('No actual employee deduction entered.'); }
+    if (status === PERIOD_STATUS.NORMAL) {
+      if (!actual.hasEmployer) { warnings.push('No actual employer contribution entered.'); }
+      if (!actual.hasEmployee) { warnings.push('No actual employee deduction entered.'); }
+    }
+    // Zero contributions in a period marked as normal are almost always a
+    // period that should be classified instead.
+    var looksEmpty = status === PERIOD_STATUS.NORMAL &&
+      roundMoney(actual.employer || 0) === 0 && roundMoney(actual.employeeNet || 0) === 0;
+    if (looksEmpty && (expectedBase.available || expectedQE.available)) {
+      warnings.push('No contributions recorded for this period. Set its status so the totals stay accurate.');
+    }
+    if (providerCheck.employeeNotRemitted) {
+      warnings.push('Deducted from your pay but not received by the scheme.');
+    }
+    if (providerCheck.employerNotRemitted) {
+      warnings.push('Shown on the payslip as an employer contribution but not received by the scheme.');
+    }
 
     return {
       id: payslip.id,
       date: payslip.date || '',
       period: payslip.period || '',
+      status: status,
+      statusLabel: PERIOD_STATUS_LABELS[status],
+      includedInTotals: status !== PERIOD_STATUS.EXCLUDED,
+      notRemitted: providerCheck.notRemitted,
+      countsTowardsBasis: status === PERIOD_STATUS.NORMAL,
+      looksEmpty: looksEmpty,
       notes: payslip.notes || '',
       grossPay: gross,
       pensionablePay: pensionable,
@@ -532,11 +646,13 @@
       expectedQE: expectedQE,
       actual: actual,
       effectiveRates: effectiveRates,
+      providerCheck: providerCheck,
       differencesVsBase: differencesVsBase,
       differencesVsQE: differencesVsQE,
       detection: detection,
       warnings: warnings,
-      hasCompleteData: gross !== null && pensionable !== null && actual.isComplete
+      hasCompleteData: status !== PERIOD_STATUS.NORMAL ||
+        (gross !== null && pensionable !== null && actual.isComplete)
     };
   }
 
@@ -575,13 +691,26 @@
       employeeGrossShortfall: 0,
       employeeNetShortfall: 0,
       taxReliefShortfall: 0,
-      totalShortfall: 0
+      totalShortfall: 0,
+      notRemitted: 0
     };
 
-    var counts = { total: 0, base: 0, qualifying: 0, neither: 0, insufficient: 0, incomplete: 0 };
+    var counts = { total: 0, analysed: 0, excluded: 0, missed: 0,
+                   base: 0, qualifying: 0, neither: 0, insufficient: 0, incomplete: 0,
+                   providerChecked: 0, providerMatched: 0, providerMismatched: 0, notRemitted: 0 };
     var cumulative = 0;
     var rows = list.map(function (p) {
       var row = analysePayslip(p, s, thresholds);
+
+      counts.total++;
+      if (!row.includedInTotals) {
+        // A period with no contributions due sits outside the audit entirely.
+        counts.excluded++;
+        row.cumulativeShortfall = cumulative;
+        return row;
+      }
+      counts.analysed++;
+      if (row.status === PERIOD_STATUS.MISSED) { counts.missed++; }
 
       addTo(totals, 'grossPay', row.grossPay);
       addTo(totals, 'pensionablePay', row.pensionablePay);
@@ -607,12 +736,19 @@
       cumulative = roundMoney(cumulative + (row.differencesVsBase.total || 0));
       row.cumulativeShortfall = cumulative;
 
-      counts.total++;
       if (row.detection.basis === BASIS.BASE) { counts.base++; }
       else if (row.detection.basis === BASIS.QE) { counts.qualifying++; }
       else if (row.detection.basis === BASIS.NEITHER) { counts.neither++; }
       else { counts.insufficient++; }
       if (!row.hasCompleteData) { counts.incomplete++; }
+      if (row.providerCheck.notRemitted) {
+        counts.notRemitted++;
+        addTo(totals, 'notRemitted', row.providerCheck.amountNotRemitted);
+      }
+      if (row.providerCheck.hasData) {
+        counts.providerChecked++;
+        if (row.providerCheck.allMatch) { counts.providerMatched++; } else { counts.providerMismatched++; }
+      }
 
       return row;
     });
@@ -627,13 +763,179 @@
     totals.targetEmployeeGrossRate = s.employeePercent;
     totals.targetTotalRate = roundMoney(s.employerPercent + s.employeePercent);
 
-    return {
+    var result = {
       rows: rows,
       totals: totals,
       counts: counts,
       thresholds: thresholds,
       settings: s,
       higherRate: calculateHigherRateRelief(totals.actualEmployeeGross, s)
+    };
+    result.verdict = determineVerdict(result);
+    result.uniformity = assessUniformity(rows);
+    return result;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Verdict: detected basis judged against the basis the scheme states
+   * ------------------------------------------------------------------ */
+
+  var VERDICT = {
+    NO_DATA: 'no-data',
+    INSUFFICIENT: 'insufficient',
+    AS_STATED: 'as-stated',
+    BETTER_THAN_STATED: 'better-than-stated',
+    SHORTFALL: 'shortfall',
+    UNMATCHED: 'unmatched',
+    MIXED: 'mixed',
+    UNKNOWN_BASIS: 'unknown-basis'
+  };
+
+  /**
+   * Which basis do the payslips consistently use? Returns a BASIS value, or
+   * 'mixed' when rows disagree, or null when nothing could be detected.
+   */
+  function dominantBasis(rows) {
+    var seen = {};
+    var count = 0;
+    rows.forEach(function (r) {
+      if (!r.countsTowardsBasis) { return; }
+      if (r.detection.basis === BASIS.INSUFFICIENT) { return; }
+      seen[r.detection.basis] = (seen[r.detection.basis] || 0) + 1;
+      count++;
+    });
+    if (!count) { return null; }
+    var keys = Object.keys(seen);
+    return keys.length === 1 ? keys[0] : 'mixed';
+  }
+
+  /**
+   * Compare what the scheme says it does against what the payslips show, and
+   * say plainly whether there is anything to raise.
+   */
+  function determineVerdict(analysis) {
+    var s = analysis.settings;
+    var stated = s.statedBasis;
+    var shortfall = analysis.totals.totalShortfall;
+
+    if (!analysis.counts.total) {
+      return { key: VERDICT.NO_DATA, stated: stated, detected: null, actionable: false,
+        summary: 'No payslips have been entered yet.' };
+    }
+    if (!analysis.counts.analysed) {
+      return { key: VERDICT.NO_DATA, stated: stated, detected: null, actionable: false,
+        summary: 'Every period entered is marked as having no contributions due, so there is nothing to analyse.' };
+    }
+
+    var detected = dominantBasis(analysis.rows);
+    var base = { key: null, stated: stated, detected: detected, actionable: false, summary: '',
+      missedPeriods: analysis.counts.missed, excludedPeriods: analysis.counts.excluded,
+      notRemittedPeriods: analysis.counts.notRemitted,
+      notRemittedAmount: analysis.totals.notRemitted };
+
+    // Periods where contributions were due but nothing was paid are a separate
+    // problem from the basis being wrong, and can stand on their own.
+    if (detected === null && analysis.counts.missed) {
+      base.key = VERDICT.SHORTFALL;
+      base.actionable = true;
+      base.summary = 'No contributions were made in ' + analysis.counts.missed + ' pay period' +
+        (analysis.counts.missed === 1 ? '' : 's') + ' where they were due.';
+      return base;
+    }
+
+    if (detected === null) {
+      base.key = VERDICT.INSUFFICIENT;
+      base.summary = 'Enter the actual employer contribution and employee deduction from your payslips so the basis can be detected.';
+      return base;
+    }
+    if (detected === 'mixed') {
+      base.key = VERDICT.MIXED;
+      base.actionable = true;
+      base.summary = 'Different pay periods appear to use different bases. Check the individual rows before drawing any conclusion.';
+      return base;
+    }
+    if (stated === 'unstated') {
+      base.key = VERDICT.UNKNOWN_BASIS;
+      base.actionable = detected !== BASIS.BASE;
+      base.summary = detected === BASIS.BASE
+        ? 'Your contributions are calculated on your base/pensionable pay. You have not recorded what basis your scheme states, so there is nothing to compare against.'
+        : 'Your contributions are not calculated on your full base/pensionable pay. Because you have not recorded what your scheme states, the tool cannot say whether that is correct.';
+      return base;
+    }
+
+    // Contributions deducted but never received by the scheme take precedence
+    // over any question about the earnings basis.
+    if (analysis.counts.notRemitted) {
+      base.key = VERDICT.SHORTFALL;
+      base.actionable = true;
+      base.summary = roundMoney(analysis.totals.notRemitted) > 0
+        ? formatCurrency(analysis.totals.notRemitted, s.currency) +
+          ' shown on your payslips was not received by the pension scheme, across ' +
+          analysis.counts.notRemitted + ' pay period' + (analysis.counts.notRemitted === 1 ? '' : 's') + '.'
+        : 'Contributions shown on your payslips were not received by the pension scheme.';
+      return base;
+    }
+
+    var statedAsBasis = stated === 'qualifying' ? BASIS.QE : BASIS.BASE;
+    if (detected === statedAsBasis && analysis.counts.missed) {
+      base.key = VERDICT.SHORTFALL;
+      base.actionable = true;
+      base.summary = 'Your contributions are calculated on the basis your scheme states, but no contributions were made at all in ' +
+        analysis.counts.missed + ' pay period' + (analysis.counts.missed === 1 ? '' : 's') + '.';
+      return base;
+    }
+    if (detected === statedAsBasis) {
+      base.key = VERDICT.AS_STATED;
+      base.summary = stated === 'qualifying'
+        ? 'Your contributions match the qualifying earnings basis your scheme states. There is no discrepancy to raise.'
+        : 'Your contributions match the base/pensionable pay basis your scheme states. There is no discrepancy to raise.';
+      return base;
+    }
+    if (detected === BASIS.NEITHER) {
+      base.key = VERDICT.UNMATCHED;
+      base.actionable = true;
+      base.summary = 'Your contributions do not match either basis. There may be a different definition of pensionable pay in use, or another factor this tool cannot see.';
+      return base;
+    }
+    if (stated === 'qualifying' && detected === BASIS.BASE) {
+      base.key = VERDICT.BETTER_THAN_STATED;
+      base.summary = 'Your contributions are calculated on your full base/pensionable pay, which is more than the qualifying earnings basis your scheme states. There is nothing to raise.';
+      return base;
+    }
+
+    base.key = VERDICT.SHORTFALL;
+    base.actionable = shortfall > s.tolerance;
+    base.summary = 'Your scheme states contributions are calculated on base/pensionable pay, but the payslip figures match the statutory qualifying earnings band instead.';
+    if (analysis.counts.missed) {
+      base.summary += ' Separately, no contributions were made at all in ' + analysis.counts.missed +
+        ' pay period' + (analysis.counts.missed === 1 ? '' : 's') + '.';
+    }
+    return base;
+  }
+
+  /**
+   * Are the figures the same in every pay period? If pay changed partway
+   * through, a letter cannot quote a single monthly figure.
+   */
+  function assessUniformity(allRows) {
+    var rows = allRows.filter(function (r) { return r.countsTowardsBasis; });
+    function distinct(pick) {
+      var seen = {};
+      rows.forEach(function (r) {
+        var v = pick(r);
+        if (v !== null && v !== undefined) { seen[roundMoney(v).toFixed(2)] = true; }
+      });
+      return Object.keys(seen);
+    }
+    var pensionable = distinct(function (r) { return r.pensionablePay; });
+    var expected = distinct(function (r) { return r.expectedBase.total; });
+    var actual = distinct(function (r) { return r.actual.total; });
+    return {
+      pensionablePayUniform: pensionable.length <= 1,
+      expectedUniform: expected.length <= 1,
+      actualUniform: actual.length <= 1,
+      uniform: pensionable.length <= 1 && expected.length <= 1 && actual.length <= 1,
+      distinctPensionablePay: pensionable.length
     };
   }
 
@@ -682,8 +984,13 @@
       period: typeof p.period === 'string' ? p.period : '',
       grossPay: toNumberOrNull(p.grossPay),
       pensionablePay: toNumberOrNull(p.pensionablePay),
+      status: [PERIOD_STATUS.NORMAL, PERIOD_STATUS.EXCLUDED, PERIOD_STATUS.MISSED]
+        .indexOf(p.status) >= 0 ? p.status : PERIOD_STATUS.NORMAL,
       actualEmployeeNet: toNumberOrNull(p.actualEmployeeNet),
       actualEmployer: toNumberOrNull(p.actualEmployer),
+      providerEmployeeNet: toNumberOrNull(p.providerEmployeeNet),
+      providerEmployer: toNumberOrNull(p.providerEmployer),
+      providerTaxRelief: toNumberOrNull(p.providerTaxRelief),
       notes: typeof p.notes === 'string' ? p.notes : ''
     };
   }
@@ -717,7 +1024,8 @@
     }
 
     if (Array.isArray(parsed.payslips)) {
-      var numericFields = ['grossPay', 'pensionablePay', 'actualEmployeeNet', 'actualEmployer'];
+      var numericFields = ['grossPay', 'pensionablePay', 'actualEmployeeNet', 'actualEmployer',
+        'providerEmployeeNet', 'providerEmployer', 'providerTaxRelief'];
       parsed.payslips.forEach(function (p, i) {
         if (!p || typeof p !== 'object' || Array.isArray(p)) {
           errors.push('Payslip ' + (i + 1) + ' is not an object.');
@@ -761,6 +1069,8 @@
   return {
     SCHEMA_VERSION: SCHEMA_VERSION,
     PAY_FREQUENCIES: PAY_FREQUENCIES,
+    PERIOD_STATUS: PERIOD_STATUS,
+    PERIOD_STATUS_LABELS: PERIOD_STATUS_LABELS,
     BASIS: BASIS,
     BASIS_LABELS: BASIS_LABELS,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
@@ -783,7 +1093,12 @@
     calculateExpectedQEContribution: calculateExpectedQEContribution,
     deriveActualContribution: deriveActualContribution,
     calculateDifferences: calculateDifferences,
+    VERDICT: VERDICT,
     calculateEffectiveRate: calculateEffectiveRate,
+    reconcileProviderData: reconcileProviderData,
+    determineVerdict: determineVerdict,
+    dominantBasis: dominantBasis,
+    assessUniformity: assessUniformity,
     calculateEffectiveRates: calculateEffectiveRates,
     detectContributionBasis: detectContributionBasis,
     calculateHigherRateRelief: calculateHigherRateRelief,

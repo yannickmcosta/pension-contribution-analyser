@@ -264,3 +264,32 @@ body {
   .navbar, .entry-table, #entry-heading, .btn, .toast-container { display: none !important; }
   .card { break-inside: avoid; }
 }
+
+/* ---------- Letter preview ---------- */
+
+.letter-preview {
+  font-family: var(--pca-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.verdict-panel .alert {
+  margin-bottom: 0;
+}
+
+.verdict-panel .verdict-figure {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* ---------- Excluded pay periods ---------- */
+
+.entry-table .col-status { width: 7.5rem; }
+
+.analysis-table .excluded-row td {
+  opacity: 0.55;
+  font-style: italic;
+}

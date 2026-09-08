@@ -19,7 +19,8 @@
     schemaVersion: C.SCHEMA_VERSION,
     settings: C.normaliseSettings({}),
     payslips: [],
-    ui: { sortKey: 'date', sortDirection: 'asc', expandAll: false }
+    ui: { sortKey: 'date', sortDirection: 'asc', expandAll: false },
+    letter: {}
   };
 
   var expandedRows = Object.create(null);
@@ -133,7 +134,8 @@
           savedAt: new Date().toISOString(),
           settings: state.settings,
           payslips: state.payslips,
-          ui: state.ui
+          ui: state.ui,
+          letter: state.letter
         }));
       } catch (e) {
         storageAvailable = false;
@@ -155,6 +157,9 @@
       var parsed = JSON.parse(raw);
       state.settings = C.normaliseSettings(parsed.settings);
       state.payslips = Array.isArray(parsed.payslips) ? parsed.payslips.map(C.normalisePayslip) : [];
+      if (parsed.letter && typeof parsed.letter === 'object') {
+        state.letter = PensionLetter.normaliseOptions(parsed.letter);
+      }
       if (parsed.ui && typeof parsed.ui === 'object') {
         state.ui.sortKey = ['date', 'shortfall', 'basis'].indexOf(parsed.ui.sortKey) >= 0 ? parsed.ui.sortKey : 'date';
         state.ui.sortDirection = parsed.ui.sortDirection === 'desc' ? 'desc' : 'asc';
@@ -296,7 +301,8 @@
     renderDifferenceCard('total-shortfall', t.totalShortfall, counts.total,
       'total pension funding');
 
-    $('stat-payslip-count').textContent = 'Payslips analysed: ' + counts.total;
+    $('stat-payslip-count').textContent = 'Payslips analysed: ' + counts.analysed +
+      (counts.excluded ? ' of ' + counts.total : '');
     $('stat-basis-counts').innerHTML = [
       basisCountLine('bi-check-circle-fill', 'text-success', 'Matches base salary', counts.base),
       basisCountLine('bi-exclamation-circle-fill', 'text-warning-emphasis', 'Matches qualifying earnings', counts.qualifying),
@@ -311,6 +317,21 @@
     }
     badges.push('<span class="badge text-bg-light border">' +
       '<i class="bi bi-calendar3" aria-hidden="true"></i> ' + escapeHtml(analysis.thresholds.frequencyLabel) + ' pay</span>');
+    if (counts.excluded) {
+      badges.push('<span class="badge text-bg-light border">' +
+        '<i class="bi bi-slash-circle" aria-hidden="true"></i> ' + counts.excluded +
+        ' period' + (counts.excluded === 1 ? '' : 's') + ' excluded</span>');
+    }
+    if (counts.notRemitted) {
+      badges.push('<span class="badge text-bg-danger">' +
+        '<i class="bi bi-exclamation-octagon-fill" aria-hidden="true"></i> ' +
+        money(analysis.totals.notRemitted) + ' not received by the scheme</span>');
+    }
+    if (counts.missed) {
+      badges.push('<span class="badge text-bg-danger">' +
+        '<i class="bi bi-exclamation-octagon-fill" aria-hidden="true"></i> ' + counts.missed +
+        ' period' + (counts.missed === 1 ? '' : 's') + ' with no contributions</span>');
+    }
     if (counts.incomplete) {
       badges.push('<span class="badge text-bg-warning">' +
         '<i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> ' + counts.incomplete +
@@ -376,6 +397,88 @@
     labelEl.innerHTML = '<i class="bi ' + cls.icon + '" aria-hidden="true"></i> ' + escapeHtml(wording[cls.key]);
   }
 
+  var VERDICT_STYLE = {};
+  VERDICT_STYLE[C.VERDICT.NO_DATA] = { alert: 'alert-secondary', icon: 'bi-info-circle', title: 'Nothing to analyse yet' };
+  VERDICT_STYLE[C.VERDICT.INSUFFICIENT] = { alert: 'alert-secondary', icon: 'bi-info-circle', title: 'Not enough information yet' };
+  VERDICT_STYLE[C.VERDICT.AS_STATED] = { alert: 'alert-success', icon: 'bi-check-circle-fill', title: 'Contributions match what your scheme states' };
+  VERDICT_STYLE[C.VERDICT.BETTER_THAN_STATED] = { alert: 'alert-success', icon: 'bi-check-circle-fill', title: 'Contributions are more than your scheme states' };
+  VERDICT_STYLE[C.VERDICT.SHORTFALL] = { alert: 'alert-danger', icon: 'bi-exclamation-triangle-fill', title: 'Contributions do not match what your scheme states' };
+  VERDICT_STYLE[C.VERDICT.UNMATCHED] = { alert: 'alert-warning', icon: 'bi-question-circle-fill', title: 'Contributions match neither basis' };
+  VERDICT_STYLE[C.VERDICT.MIXED] = { alert: 'alert-warning', icon: 'bi-exclamation-circle-fill', title: 'Pay periods use different bases' };
+  VERDICT_STYLE[C.VERDICT.UNKNOWN_BASIS] = { alert: 'alert-warning', icon: 'bi-question-circle-fill', title: 'Stated basis not recorded' };
+
+  /* Plain-English guidance shown beneath the verdict when guided help is on. */
+  var VERDICT_GUIDANCE = {};
+  VERDICT_GUIDANCE[C.VERDICT.INSUFFICIENT] =
+    'Fill in the two "actual" columns on each payslip row: the pension amount taken off your pay, and the ' +
+    'employer contribution. Both are usually printed on the payslip, often near the tax and National Insurance lines.';
+  VERDICT_GUIDANCE[C.VERDICT.AS_STATED] =
+    'Nothing to do. The amounts on your payslips are what the percentages in your scheme documentation produce, ' +
+    'so the calculation appears to be working as described.';
+  VERDICT_GUIDANCE[C.VERDICT.BETTER_THAN_STATED] =
+    'Nothing to do. You are getting more than the minimum your scheme describes.';
+  VERDICT_GUIDANCE[C.VERDICT.SHORTFALL] =
+    'This does not automatically mean anything improper has happened, but it is worth asking about. ' +
+    'Check your enrolment letter and scheme booklet first: if they say contributions are based on your salary, ' +
+    'the figures below are what you would expect, and they are not what you are getting. Use the button to draft ' +
+    'an email, and read it through before sending.';
+  VERDICT_GUIDANCE[C.VERDICT.UNMATCHED] =
+    'Your figures do not fit either calculation, so something else is going on. Common explanations are a ' +
+    'different definition of pensionable pay, salary sacrifice, a mid-period pay change, or a different tax ' +
+    'relief method. Ask your employer for a breakdown rather than assuming an error.';
+  VERDICT_GUIDANCE[C.VERDICT.MIXED] =
+    'Different pay periods are producing different answers. Most often that is a period with no contributions ' +
+    'that needs its status setting, or a pay change partway through. Expand the rows below to see which ones differ.';
+  VERDICT_GUIDANCE[C.VERDICT.UNKNOWN_BASIS] =
+    'To judge whether this is right, the tool needs to know what your scheme says. Find your pension enrolment ' +
+    'letter, then set the basis in Settings.';
+
+  function renderVerdict() {
+    var v = analysis.verdict;
+    var style = VERDICT_STYLE[v.key] || VERDICT_STYLE[C.VERDICT.NO_DATA];
+    var panel = $('verdict-panel');
+
+    if (v.key === C.VERDICT.NO_DATA) { panel.innerHTML = ''; return; }
+
+    var figure = '';
+    if (v.key === C.VERDICT.SHORTFALL || v.key === C.VERDICT.UNMATCHED) {
+      figure = '<p class="mb-2">Total difference in pension funding across ' + analysis.counts.total +
+        ' pay period' + (analysis.counts.total === 1 ? '' : 's') + ': ' +
+        '<span class="verdict-figure">' + money(analysis.totals.totalShortfall) + '</span>, of which ' +
+        '<span class="verdict-figure">' + money(analysis.totals.employerShortfall) + '</span> is employer contributions.</p>';
+    }
+
+    var letterButton = PensionLetter.assess(analysis).canGenerate
+      ? '<button type="button" class="btn btn-sm btn-primary" id="btn-open-letter">' +
+        '<i class="bi bi-envelope-paper" aria-hidden="true"></i> Draft an email to your employer</button>'
+      : '';
+
+    var guidance = state.settings.guidedHelp ? VERDICT_GUIDANCE[v.key] : null;
+    var guidanceHtml = guidance
+      ? '<p class="small mb-2"><i class="bi bi-lightbulb" aria-hidden="true"></i> ' +
+        escapeHtml(guidance) + '</p>'
+      : '';
+
+    panel.className = 'verdict-panel';
+    panel.innerHTML =
+      '<div class="alert ' + style.alert + '" role="note">' +
+        '<div class="d-flex align-items-start gap-2">' +
+          '<i class="bi ' + style.icon + ' flex-shrink-0 mt-1" aria-hidden="true"></i>' +
+          '<div class="flex-grow-1">' +
+            '<h3 class="h6 mb-1">' + escapeHtml(style.title) + '</h3>' +
+            '<p class="mb-2 small">' + escapeHtml(v.summary) + '</p>' +
+            figure +
+            guidanceHtml +
+            letterButton +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    if (letterButton) {
+      $('btn-open-letter').addEventListener('click', openLetterModal);
+    }
+  }
+
   /* ================================================================== *
    * Rendering: settings summary strip
    * ================================================================== */
@@ -424,6 +527,22 @@
       ' aria-label="' + escapeHtml(label) + '">';
   }
 
+  var STATUS_OPTIONS = [
+    { value: C.PERIOD_STATUS.NORMAL, label: 'Contributing' },
+    { value: C.PERIOD_STATUS.EXCLUDED, label: 'None due' },
+    { value: C.PERIOD_STATUS.MISSED, label: 'Missed' }
+  ];
+
+  function statusSelect(row, dateLabel) {
+    var current = row.status || C.PERIOD_STATUS.NORMAL;
+    return '<select class="form-select form-select-sm" data-row-id="' + escapeHtml(row.id) + '"' +
+      ' data-field="status" aria-label="Period status for ' + escapeHtml(dateLabel) + '">' +
+      STATUS_OPTIONS.map(function (o) {
+        return '<option value="' + o.value + '"' + (o.value === current ? ' selected' : '') + '>' +
+          escapeHtml(o.label) + '</option>';
+      }).join('') + '</select>';
+  }
+
   function renderEntryTable() {
     var body = $('entry-body');
     var empty = $('entry-empty');
@@ -434,6 +553,11 @@
       return;
     }
     empty.hidden = true;
+
+    var providerHidden = state.settings.trackProviderData ? '' : ' d-none';
+    qsa('.entry-table thead .provider-col').forEach(function (th) {
+      th.classList.toggle('d-none', !state.settings.trackProviderData);
+    });
 
     body.innerHTML = state.payslips.map(function (row) {
       var dateLabel = row.date ? C.formatDateUK(row.date) : 'undated payslip';
@@ -446,10 +570,17 @@
         '<td><input type="text" class="form-control form-control-sm" data-row-id="' + escapeHtml(row.id) + '"' +
           ' data-field="period" value="' + escapeHtml(row.period || '') + '" maxlength="60"' +
           ' placeholder="e.g. August 2026" aria-label="Pay period or description"></td>' +
+        '<td>' + statusSelect(row, dateLabel) + '</td>' +
         '<td>' + moneyInput(row, 'grossPay', '0.00', 'Gross pay for ' + dateLabel) + '</td>' +
         '<td>' + moneyInput(row, 'pensionablePay', inheritedPlaceholder, 'Base or pensionable pay for ' + dateLabel) + '</td>' +
         '<td>' + moneyInput(row, 'actualEmployeeNet', '0.00', 'Actual employee pension deduction for ' + dateLabel) + '</td>' +
         '<td>' + moneyInput(row, 'actualEmployer', '0.00', 'Actual employer pension contribution for ' + dateLabel) + '</td>' +
+        '<td class="provider-col' + providerHidden + '">' +
+          moneyInput(row, 'providerEmployeeNet', '', 'Provider employee amount for ' + dateLabel) + '</td>' +
+        '<td class="provider-col' + providerHidden + '">' +
+          moneyInput(row, 'providerEmployer', '', 'Provider employer amount for ' + dateLabel) + '</td>' +
+        '<td class="provider-col' + providerHidden + '">' +
+          moneyInput(row, 'providerTaxRelief', '', 'Provider tax relief for ' + dateLabel) + '</td>' +
         '<td><input type="text" class="form-control form-control-sm" data-row-id="' + escapeHtml(row.id) + '"' +
           ' data-field="notes" value="' + escapeHtml(row.notes || '') + '" maxlength="200"' +
           ' placeholder="Optional" aria-label="Notes for ' + escapeHtml(dateLabel) + '"></td>' +
@@ -508,7 +639,8 @@
       var dateLabel = row.date ? C.formatDateUK(row.date) : '(no date)';
       var detailId = 'detail-' + row.id;
 
-      var summaryRow = '<tr>' +
+      var rowClass = row.includedInTotals ? '' : ' class="excluded-row"';
+      var summaryRow = '<tr' + rowClass + '>' +
         '<td class="pe-0">' +
           '<button type="button" class="btn btn-sm btn-link p-0 expand-btn" data-action="toggle-detail"' +
           ' data-row-id="' + escapeHtml(row.id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '"' +
@@ -517,6 +649,8 @@
         '</td>' +
         '<td><span class="fw-semibold">' + escapeHtml(dateLabel) + '</span>' +
           (row.period ? '<span class="d-block text-body-secondary">' + escapeHtml(row.period) + '</span>' : '') +
+          (row.status !== C.PERIOD_STATUS.NORMAL
+            ? '<span class="d-block small text-body-secondary">' + escapeHtml(row.statusLabel) + '</span>' : '') +
           (row.warnings.length ? '<span class="d-block small row-warning" title="' + escapeHtml(row.warnings.join(' ')) + '">' +
             '<i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Incomplete</span>' : '') +
         '</td>' +
@@ -629,6 +763,7 @@
         (actual.isComplete ? '' :
           '<p class="small row-warning mt-2 mb-0"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> ' +
           'Missing payslip figures are treated as nil in the comparison.</p>') +
+        providerCheckLines(row) +
       '</div></div>';
 
     var detection = row.detection;
@@ -708,6 +843,39 @@
     return line(label + ' rate', '<span class="' + cls + '">' + rate(effective) + suffix + '</span>');
   }
 
+  /** Cross-check against what the pension provider says it received. */
+  function providerCheckLines(row) {
+    var p = row.providerCheck;
+    if (!p.hasData) { return ''; }
+    var lines = ['<p class="formula mt-2 mb-1">Cross-check against ' +
+      escapeHtml(state.settings.providerName || 'your provider') + ' records</p>'];
+
+    function checkLine(label, check) {
+      if (!check) { return ''; }
+      var cls = check.matches ? 'text-success' : 'text-danger';
+      var icon = check.matches ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
+      var word = check.matches ? 'agrees' : 'differs by ' + money(Math.abs(check.difference));
+      return line(label, '<span class="' + cls + '"><i class="bi ' + icon + '" aria-hidden="true"></i> ' +
+        money(check.provider) + ' <span class="fw-normal">' + word + '</span></span>');
+    }
+
+    lines.push(checkLine('Employee amount received', p.employee));
+    lines.push(checkLine('Employer amount received', p.employer));
+    lines.push(checkLine('Tax relief received', p.taxRelief));
+    if (p.notRemitted) {
+      lines.push('<p class="small text-danger fw-semibold mt-2 mb-0">' +
+        '<i class="bi bi-exclamation-octagon-fill" aria-hidden="true"></i> ' +
+        money(p.amountNotRemitted) + ' shown on the payslip has not reached the scheme. ' +
+        'Contributions taken from pay must be passed on within set time limits, so this is worth raising ' +
+        'separately from any question about the earnings basis.</p>');
+    }
+    if (p.reliefPending) {
+      lines.push('<p class="small text-body-secondary mt-1 mb-0">Tax relief not yet recorded. Providers normally ' +
+        'claim it from HMRC a month or two after the contribution.</p>');
+    }
+    return lines.join('');
+  }
+
   function differenceLine(label, value, extraClass) {
     if (value === null || value === undefined) {
       return line(label, '<span class="text-body-secondary">—</span>', extraClass);
@@ -750,7 +918,7 @@
   }
 
   function renderCharts() {
-    var rows = C.sortAnalysedRows(analysis.rows, 'date', 'asc');
+    var rows = C.sortAnalysedRows(analysis.rows.filter(function (r) { return r.includedInTotals; }), 'date', 'asc');
     $('chart-legend').innerHTML = [
       { colour: CHART_COLOURS.base, label: 'Expected — base salary' },
       { colour: CHART_COLOURS.qe, label: 'Expected — qualifying earnings' },
@@ -972,19 +1140,36 @@
     var opts = options || {};
     recalculate();
     if (opts.skipEntryTable !== true) { renderEntryTable(); }
+    renderVerdict();
     renderSummary();
     renderSettingsSummary();
     renderAnalysisTable();
     renderCharts();
     renderHigherRate();
     $('btn-duplicate-last').disabled = state.payslips.length === 0;
+    // The letter depends on the analysis, so keep it in step while it is open.
+    if ($('letterModal').classList.contains('show')) { renderLetter(); }
+    applyGuidedHelp();
   }
 
-  /* Tooltips are only used on static chrome, so they are initialised once.
-     Dynamic table cells use plain title attributes instead. */
-  function initTooltips() {
-    qsa('[data-bs-toggle="tooltip"]').forEach(function (el) {
-      new bootstrap.Tooltip(el, { container: 'body' });
+  /* Tooltips live on static chrome only; dynamic table cells use plain title
+     attributes. They are torn down and rebuilt when guided help is toggled. */
+  var tooltipInstances = [];
+
+  function applyGuidedHelp() {
+    var on = state.settings.guidedHelp;
+
+    tooltipInstances.forEach(function (t) {
+      try { t.dispose(); } catch (e) { /* already gone */ }
+    });
+    tooltipInstances = [];
+
+    qsa('.help-tip').forEach(function (el) { el.classList.toggle('d-none', !on); });
+    qsa('.guided-help').forEach(function (el) { el.classList.toggle('d-none', !on); });
+
+    if (!on) { return; }
+    tooltipInstances = qsa('[data-bs-toggle="tooltip"]').map(function (el) {
+      return new bootstrap.Tooltip(el, { container: 'body' });
     });
   }
 
@@ -1014,6 +1199,10 @@
     $('set-tolerance').value = s.tolerance;
     $('set-currency').value = s.currency;
     $('set-use-gross').checked = s.useGrossAsPensionable;
+    $('set-stated-basis').value = s.statedBasis;
+    $('set-provider-name').value = s.providerName;
+    $('set-track-provider').checked = s.trackProviderData;
+    $('set-guided-help').checked = s.guidedHelp;
     updateSettingsFormState();
   }
 
@@ -1043,6 +1232,10 @@
       tolerance: $('set-tolerance').value,
       currency: $('set-currency').value,
       useGrossAsPensionable: $('set-use-gross').checked,
+      statedBasis: $('set-stated-basis').value,
+      providerName: $('set-provider-name').value,
+      trackProviderData: $('set-track-provider').checked,
+      guidedHelp: $('set-guided-help').checked,
       marginalTaxRatePercent: state.settings.marginalTaxRatePercent,
       showHigherRatePanel: state.settings.showHigherRatePanel
     });
@@ -1086,6 +1279,10 @@
           pensionablePay: p.pensionablePay,
           actualEmployeeNet: p.actualEmployeeNet,
           actualEmployer: p.actualEmployer,
+          providerEmployeeNet: p.providerEmployeeNet,
+          providerEmployer: p.providerEmployer,
+          providerTaxRelief: p.providerTaxRelief,
+          status: p.status,
           notes: p.notes
         };
       })
@@ -1256,12 +1453,140 @@
   }
 
   /* ================================================================== *
+   * Draft email
+   * ================================================================== */
+
+  var LETTER_FIELDS = {
+    'letter-recipient': 'recipientName',
+    'letter-sender': 'senderName',
+    'letter-enrolled': 'enrolmentPeriod',
+    'letter-quote': 'schemeQuote',
+    'letter-contract-entity': 'contractEntity',
+    'letter-provider-entity': 'providerEntity'
+  };
+  var LETTER_CHECKS = {
+    'letter-no-variable': 'noVariablePay',
+    'letter-colleagues': 'colleaguesCompared',
+    'letter-colleagues-raising': 'colleaguesRaisingSeparately'
+  };
+
+  function openLetterModal() {
+    Object.keys(LETTER_FIELDS).forEach(function (id) {
+      $(id).value = state.letter[LETTER_FIELDS[id]] || '';
+    });
+    Object.keys(LETTER_CHECKS).forEach(function (id) {
+      $(id).checked = state.letter[LETTER_CHECKS[id]] === true;
+    });
+    $('letter-response-by').value = state.letter.responseByIso || defaultResponseDate();
+    renderLetter();
+    bootstrap.Modal.getOrCreateInstance($('letterModal')).show();
+  }
+
+  /** A fortnight from today, as a sensible default deadline. */
+  function defaultResponseDate() {
+    var d = new Date();
+    d.setDate(d.getDate() + 14);
+    return C.toIsoDate(d);
+  }
+
+  function readLetterForm() {
+    var options = {};
+    Object.keys(LETTER_FIELDS).forEach(function (id) {
+      options[LETTER_FIELDS[id]] = $(id).value;
+    });
+    Object.keys(LETTER_CHECKS).forEach(function (id) {
+      options[LETTER_CHECKS[id]] = $(id).checked;
+    });
+    var iso = $('letter-response-by').value;
+    options.responseByIso = iso;
+    options.responseBy = iso ? C.formatDateUK(iso) : '';
+    options.annualSalary = state.settings.annualBaseSalary || null;
+    return options;
+  }
+
+  var currentLetter = null;
+
+  function renderLetter() {
+    var options = readLetterForm();
+    state.letter = Object.assign({}, PensionLetter.normaliseOptions(options), { responseByIso: options.responseByIso });
+    save();
+
+    var result = PensionLetter.compose(analysis, options);
+    currentLetter = result;
+
+    $('letter-blocked').hidden = result.canGenerate;
+    $('letter-builder').hidden = !result.canGenerate;
+    $('btn-letter-copy').disabled = !result.canGenerate;
+    $('btn-letter-download').disabled = !result.canGenerate;
+
+    if (!result.canGenerate) {
+      $('letter-blocked-reason').textContent = result.reason;
+      return;
+    }
+
+    $('letter-variant-note').innerHTML = result.reason
+      ? '<i class="bi bi-info-circle" aria-hidden="true"></i> ' + escapeHtml(result.reason)
+      : '<i class="bi bi-info-circle" aria-hidden="true"></i> Read this through and put it in your own words before sending. ' +
+        'It sets out the figures; the judgement about whether and how to raise it is yours.';
+    $('letter-subject').value = result.subject;
+    $('letter-preview').value = result.body;
+
+    var hasPlaceholders = result.placeholders.length > 0;
+    $('letter-placeholders').hidden = !hasPlaceholders;
+    if (hasPlaceholders) {
+      $('letter-placeholder-list').textContent = result.placeholders.join(', ');
+    }
+  }
+
+  function copyLetter() {
+    if (!currentLetter || !currentLetter.canGenerate) { return; }
+    var text = 'Subject: ' + currentLetter.subject + '\n\n' + currentLetter.body;
+    var preview = $('letter-preview');
+
+    function fallback() {
+      preview.removeAttribute('readonly');
+      preview.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      preview.setAttribute('readonly', 'readonly');
+      preview.setSelectionRange(0, 0);
+      showToast(ok ? 'Email copied to the clipboard.' : 'Could not copy automatically. Select the text and copy it manually.',
+        ok ? 'success' : 'warning');
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        showToast('Email copied to the clipboard, including the subject line.', 'success');
+      }).catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  function downloadLetter() {
+    if (!currentLetter || !currentLetter.canGenerate) { return; }
+    downloadFile('pension-contribution-email-' + todayStamp() + '.txt',
+      'Subject: ' + currentLetter.subject + '\n\n' + currentLetter.body, 'text/plain;charset=utf-8');
+    showToast('Downloaded. The file is saved locally and not sent anywhere.', 'success');
+  }
+
+  /* ================================================================== *
    * Events
    * ================================================================== */
 
   function bindEvents() {
     /* --- payslip entry table --- */
     var entryBody = $('entry-body');
+
+    entryBody.addEventListener('change', function (event) {
+      if (event.target.getAttribute('data-field') !== 'status') { return; }
+      var id = event.target.getAttribute('data-row-id');
+      var row = state.payslips.find(function (p) { return p.id === id; });
+      if (!row) { return; }
+      row.status = event.target.value;
+      save();
+      render({ skipEntryTable: true });
+    });
 
     entryBody.addEventListener('input', function (event) {
       var target = event.target;
@@ -1271,7 +1596,7 @@
       var row = state.payslips.find(function (p) { return p.id === id; });
       if (!row) { return; }
 
-      if (field === 'date' || field === 'period' || field === 'notes') {
+      if (field === 'date' || field === 'period' || field === 'notes' || field === 'status') {
         row[field] = target.value;
       } else {
         row[field] = C.toNumberOrNull(target.value);
@@ -1393,6 +1718,14 @@
     });
     $('btn-confirm-clear').addEventListener('click', clearAll);
 
+    /* --- draft email --- */
+    qsa('#letter-form input, #letter-form textarea').forEach(function (field) {
+      field.addEventListener('input', renderLetter);
+      field.addEventListener('change', renderLetter);
+    });
+    $('btn-letter-copy').addEventListener('click', copyLetter);
+    $('btn-letter-download').addEventListener('click', downloadLetter);
+
     /* --- tests --- */
     $('btn-run-tests').addEventListener('click', runTests);
 
@@ -1446,7 +1779,6 @@
     updateExpandAllButton();
     bindEvents();
     render();
-    initTooltips();
     if (!storageAvailable) {
       showToast('Local storage is not available in this browser context, so your work will not be saved between visits.', 'warning');
     }
